@@ -22,6 +22,26 @@ or campaign structure.
   music playback
 - Decorative cave detail
 
+## What's Broken / What's Next
+
+The game is nowhere near complete. The biggest rough edges right now are LOD
+presentation and loading - placeholder geometry and preview chunks can look
+like bugs when they pop up near the player.
+
+- **LOD visual contract**: define explicit roles, distance ranges, and
+  replacement rules for each LOD layer so preview blocks never draw inside
+  loaded chunks near the player.
+- **Startup loading**: stop showing coarse preview geometry where the player
+  can immediately fly into it.
+- **Sky openings**: make them convincing carved geometry instead of sky cards
+  the player can approach from the side.
+- **Cave lighting**: tune ambient, sun, fog, and material brightness per level
+  so ceilings and hazards read clearly.
+- **Navigation landmarks**: add obvious anchors (pillars, arches, platforms) to
+  large chambers.
+- **Material variety**: break up the "single green cave" look with stronger
+  contrast between floor, wall, and ceiling surfaces.
+
 ## Controls
 
 ### Player Controls
