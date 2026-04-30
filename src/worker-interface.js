@@ -300,7 +300,9 @@ function createTerrainWorkerInterface(options = {}) {
     };
 
     workerInterface.pendingTasks.set(taskId, task);
-    if (queueOptions.front === true) {
+    if (queueOptions.priority === true) {
+      workerInterface.taskQueue.push(task);
+    } else if (queueOptions.front === true) {
       workerInterface.backgroundTaskQueue.unshift(task);
     } else {
       workerInterface.backgroundTaskQueue.push(task);

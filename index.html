@@ -348,7 +348,7 @@
       .progress-container {
         width: 60%;
         max-width: 480px;
-        height: 24px;
+        height: 30px;
         background-color: #0f1412;
         border: 1px solid rgba(120, 180, 160, 0.25);
         border-radius: 3px;
@@ -375,13 +375,29 @@
         overflow: hidden;
       }
 
-      .progress-bar::after {
+      .progress-bar::before {
         content: '';
         position: absolute;
         top: 0;
-        left: 0;
-        right: 0;
+        left: -45%;
+        width: 45%;
         bottom: 0;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(180, 255, 215, 0.08) 25%,
+          rgba(220, 255, 240, 0.36) 50%,
+          rgba(180, 255, 215, 0.08) 75%,
+          transparent 100%
+        );
+        animation: progress-sheen 1.35s linear infinite;
+        z-index: 1;
+      }
+
+      .progress-bar::after {
+        content: '';
+        position: absolute;
+        inset: 0;
         background: repeating-linear-gradient(
           90deg,
           transparent 0px,
@@ -389,6 +405,16 @@
           rgba(0, 0, 0, 0.35) 22px,
           rgba(0, 0, 0, 0.35) 24px
         );
+        z-index: 2;
+      }
+
+      @keyframes progress-sheen {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(325%);
+        }
       }
 
       .progress-text {
@@ -396,21 +422,24 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        font-size: 0.75rem;
+        font-size: 1rem;
         font-weight: bold;
         color: #ffffff;
-        text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
-        letter-spacing: 0.08em;
-        z-index: 1;
+        text-shadow:
+          0 0 4px rgba(0, 0, 0, 0.95),
+          0 0 12px rgba(190, 255, 225, 0.55);
+        letter-spacing: 0.12em;
+        z-index: 3;
       }
 
       .loading-details {
         margin-top: 1.5rem;
-        font-size: 0.85rem;
-        color: #7a9a8e;
+        min-height: 1.5rem;
+        font-size: 0.82rem;
+        color: #9db4aa;
         text-align: center;
         line-height: 1.5;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
       }
     </style>
   </head>

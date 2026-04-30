@@ -17,9 +17,13 @@ export function applyLodDistanceFade(material) {
     return;
   }
 
+  var useAlphaHashFade = material.userData.alphaHashFade === true;
+  var useFadeCenter = material.userData.useFadeCenter === true;
+
   material.userData.lodDistanceFade = true;
-  material.transparent = true;
-  material.depthWrite = false;
+  material.transparent = !useAlphaHashFade;
+  material.depthWrite = useAlphaHashFade;
+  material.alphaHash = false;
   material.needsUpdate = true;
 
   material.onBeforeCompile = function (shader) {
@@ -31,6 +35,10 @@ export function applyLodDistanceFade(material) {
     shader.uniforms.lodFadeOutFar = {
       value: material.userData.fadeOutFar || 99999,
     };
+    shader.uniforms.lodFadeCenter = {
+      value: material.userData.fadeCenter || new THREE.Vector3(),
+    };
+    material.userData.lodShader = shader;
 
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',
@@ -40,15 +48,49 @@ export function applyLodDistanceFade(material) {
       '#include <project_vertex>',
       'vec4 lodWorldPosition = modelMatrix * vec4(transformed, 1.0);\nvLodWorldPosition = lodWorldPosition.xyz;\n#include <project_vertex>'
     );
+    var distanceSource = useFadeCenter ? 'lodFadeCenter' : 'cameraPosition';
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
-      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
+      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nuniform vec3 lodFadeCenter;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
     );
+    var fadeShader =
+      'float lodDistance = distance(' +
+      distanceSource +
+      ', vLodWorldPosition);\nfloat lodFadeIn = lodSmoothFade(lodFadeNear, lodFadeFar, lodDistance);\nfloat lodFadeOut = 1.0 - lodSmoothFade(lodFadeOutNear, lodFadeOutFar, lodDistance);\ndiffuseColor.a *= lodFadeIn * lodFadeOut;\nif (diffuseColor.a < 0.02) discard;';
+
+    if (useAlphaHashFade) {
+      fadeShader =
+        'float lodDistance = distance(' +
+        distanceSource +
+        ', vLodWorldPosition);\nfloat lodFadeIn = lodSmoothFade(lodFadeNear, lodFadeFar, lodDistance);\nfloat lodFadeOut = 1.0 - lodSmoothFade(lodFadeOutNear, lodFadeOutFar, lodDistance);\nfloat lodVisibility = lodFadeIn * lodFadeOut;\nif (lodVisibility < 0.99) discard;\ndiffuseColor.a = 1.0;';
+    }
+
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <dithering_fragment>',
-      'float lodDistance = distance(cameraPosition, vLodWorldPosition);\nfloat lodFadeIn = lodSmoothFade(lodFadeNear, lodFadeFar, lodDistance);\nfloat lodFadeOut = 1.0 - lodSmoothFade(lodFadeOutNear, lodFadeOutFar, lodDistance);\ngl_FragColor.a *= lodFadeIn * lodFadeOut;\nif (gl_FragColor.a < 0.02) discard;\n#include <dithering_fragment>'
+      '#include <clipping_planes_fragment>',
+      '#include <clipping_planes_fragment>\n' + fadeShader
     );
   };
+}
+
+export function updateLodFadeCenter(root, center) {
+  if (!root || !center) {
+    return;
+  }
+
+  root.traverse(function (child) {
+    var material = child.material;
+    var shader =
+      material && material.userData ? material.userData.lodShader : null;
+
+    if (
+      shader &&
+      shader.uniforms &&
+      shader.uniforms.lodFadeCenter &&
+      shader.uniforms.lodFadeCenter.value
+    ) {
+      shader.uniforms.lodFadeCenter.value.copy(center);
+    }
+  });
 }
 
 function createMeshFromLodData(
@@ -338,7 +380,7 @@ export async function createStartupPreviewLodAsync(
 ) {
   var blockSize =
     typeof options.blockSize === 'number' ? options.blockSize : 16;
-  var opacity = typeof options.opacity === 'number' ? options.opacity : 0.34;
+  var opacity = typeof options.opacity === 'number' ? options.opacity : 1;
   var tileWorldSize =
     typeof options.tileWorldSize === 'number' ? options.tileWorldSize : 128;
   var fadeNear =
@@ -412,8 +454,8 @@ export async function createStartupPreviewLodAsync(
                   tileY,
                   tileZ,
                   {
-                    transparent: true,
-                    depthWrite: false,
+                    transparent: false,
+                    depthWrite: true,
                     side: THREE.FrontSide,
                     opacity: opacity,
                     name: lodKey,
@@ -423,6 +465,8 @@ export async function createStartupPreviewLodAsync(
                       fadeOutNear: 99999,
                       fadeOutFar: 99999,
                       maxOpacity: opacity,
+                      alphaHashFade: true,
+                      useFadeCenter: true,
                     },
                     distanceFade: true,
                     shellCenter: new THREE.Vector3(
@@ -561,23 +605,42 @@ export function createFarShellSystemAsync(
   chunkManager,
   shells,
   fogOptions,
-  minimumDistance
+  minimumDistance,
+  options = {}
 ) {
   var shellConfigs = shells && shells.length > 0 ? shells : DEFAULT_SHELLS;
   var minDist = typeof minimumDistance === 'number' ? minimumDistance : 0;
   var generator = chunkManager.generator;
   var workerInterface = chunkManager.workerInterface;
   var terrainWorkerConfig = chunkManager.terrainWorkerConfig;
+  var priorityShellCount =
+    typeof options.priorityShellCount === 'number'
+      ? options.priorityShellCount
+      : 0;
 
   var group = new THREE.Group();
   group.name = 'farShellSystem';
   group.userData.totalShells = shellConfigs.length;
   group.userData.loadedShells = 0;
+  var resolvePriorityShellsReady;
+  group.userData.priorityShellsReady = new Promise(function (resolve) {
+    resolvePriorityShellsReady = resolve;
+  });
+  var expectedPriorityShells = Math.min(
+    priorityShellCount,
+    shellConfigs.length
+  );
+  var priorityShellsSettled = 0;
 
-  shellConfigs.forEach(function (config) {
+  if (expectedPriorityShells === 0) {
+    resolvePriorityShellsReady();
+  }
+
+  shellConfigs.forEach(function (config, shellIndex) {
     if (config.blockSize <= 2) {
       return;
     }
+    var isPriorityShell = shellIndex < priorityShellCount;
 
     var options = {
       blockSize: config.blockSize,
@@ -635,7 +698,9 @@ export function createFarShellSystemAsync(
     };
 
     workerInterface
-      .generateLodGeometry(lodKey, terrainWorkerConfig, geoOptions)
+      .generateLodGeometry(lodKey, terrainWorkerConfig, geoOptions, {
+        priority: isPriorityShell,
+      })
       .then(function (result) {
         var shellCenterX = startX + (gridW * options.blockSize) / 2;
         var shellCenterY = startY + (gridH * options.blockSize) / 2;
@@ -677,9 +742,21 @@ export function createFarShellSystemAsync(
           // If no mesh was generated (empty), it's still "processed"
           group.userData.loadedShells++;
         }
+        if (isPriorityShell) {
+          priorityShellsSettled++;
+          if (priorityShellsSettled >= expectedPriorityShells) {
+            resolvePriorityShellsReady();
+          }
+        }
       })
       .catch(function (err) {
         group.userData.loadedShells++;
+        if (isPriorityShell) {
+          priorityShellsSettled++;
+          if (priorityShellsSettled >= expectedPriorityShells) {
+            resolvePriorityShellsReady();
+          }
+        }
         debugError('[LODAsync] Failed to build ' + lodKey, err);
       });
   });
@@ -910,7 +987,8 @@ export function createMidLodSystemAsync(
   chunkWorldSize,
   levelBounds,
   outerDistance,
-  centerPosition
+  centerPosition,
+  options = {}
 ) {
   var blockSize = 2;
   var pad = blockSize * 4;
@@ -927,6 +1005,11 @@ export function createMidLodSystemAsync(
   var meshesByChunkKey = new Map();
   var chunkCoordsByKey = new Map();
   var maxDistance = typeof outerDistance === 'number' ? outerDistance : 384;
+  var priorityChunkCount =
+    typeof options.priorityChunkCount === 'number'
+      ? options.priorityChunkCount
+      : 0;
+  var priorityDirection = options.priorityDirection || null;
   var group = new THREE.Group();
   group.name = 'midLodSystem';
 
@@ -935,11 +1018,21 @@ export function createMidLodSystemAsync(
     (maxChunkY - minChunkY + 1) *
     (maxChunkZ - minChunkZ + 1);
 
+  var resolvePriorityChunksReady;
+  var priorityChunksReady = new Promise(function (resolve) {
+    resolvePriorityChunksReady = resolve;
+  });
+  var priorityChunksSettled = 0;
+  var expectedPriorityChunks = 0;
+
   var system = {
     group: group,
     meshesByChunkKey: meshesByChunkKey,
     totalChunks: totalChunksCount,
     loadedChunks: 0,
+    priorityChunks: 0,
+    priorityTotalChunks: 0,
+    priorityChunksReady: priorityChunksReady,
     syncVisibility: function (cm, centerPosition) {
       for (var entry of meshesByChunkKey.entries()) {
         var chunkKey = entry[0];
@@ -975,6 +1068,15 @@ export function createMidLodSystemAsync(
   var cellsPerAxis = Math.floor(chunkWorldSize / blockSize);
   var samples = getCoarseCellSampleOffsets(blockSize);
   var threshold = getCoarseSolidThreshold(blockSize);
+  var centerChunkX = centerPosition
+    ? Math.floor(centerPosition.x / chunkWorldSize)
+    : 0;
+  var centerChunkY = centerPosition
+    ? Math.floor(centerPosition.y / chunkWorldSize)
+    : 0;
+  var centerChunkZ = centerPosition
+    ? Math.floor(centerPosition.z / chunkWorldSize)
+    : 0;
 
   var lodJobs = [];
 
@@ -998,12 +1100,32 @@ export function createMidLodSystemAsync(
   }
 
   lodJobs.sort(function (a, b) {
-    return a.distance - b.distance;
+    var aPriority = a.distance;
+    var bPriority = b.distance;
+
+    if (priorityDirection) {
+      aPriority -=
+        (a.x - centerChunkX) * priorityDirection.x * chunkWorldSize +
+        (a.y - centerChunkY) * priorityDirection.y * chunkWorldSize +
+        (a.z - centerChunkZ) * priorityDirection.z * chunkWorldSize;
+      bPriority -=
+        (b.x - centerChunkX) * priorityDirection.x * chunkWorldSize +
+        (b.y - centerChunkY) * priorityDirection.y * chunkWorldSize +
+        (b.z - centerChunkZ) * priorityDirection.z * chunkWorldSize;
+    }
+
+    return aPriority - bPriority;
   });
+
+  expectedPriorityChunks = Math.min(priorityChunkCount, lodJobs.length);
+  system.priorityTotalChunks = expectedPriorityChunks;
+  if (expectedPriorityChunks === 0) {
+    resolvePriorityChunksReady();
+  }
 
   for (var jobIndex = 0; jobIndex < lodJobs.length; jobIndex++) {
     var job = lodJobs[jobIndex];
-    (function (cx, cy, cz) {
+    (function (cx, cy, cz, isPriorityJob) {
       var originX = cx * chunkWorldSize;
       var originY = cy * chunkWorldSize;
       var originZ = cz * chunkWorldSize;
@@ -1025,7 +1147,7 @@ export function createMidLodSystemAsync(
 
       workerInterface
         .generateLodGeometry(lodKey, terrainWorkerConfig, geoOptions, {
-          front: true,
+          priority: isPriorityJob,
         })
         .then(function (result) {
           system.loadedChunks++;
@@ -1054,12 +1176,27 @@ export function createMidLodSystemAsync(
             // Initial visibility check
             mesh.visible = false;
           }
+
+          if (isPriorityJob) {
+            priorityChunksSettled++;
+            system.priorityChunks = priorityChunksSettled;
+            if (priorityChunksSettled >= expectedPriorityChunks) {
+              resolvePriorityChunksReady();
+            }
+          }
         })
         .catch(function () {
           system.loadedChunks++;
+          if (isPriorityJob) {
+            priorityChunksSettled++;
+            system.priorityChunks = priorityChunksSettled;
+            if (priorityChunksSettled >= expectedPriorityChunks) {
+              resolvePriorityChunksReady();
+            }
+          }
           // Silently fail for some chunks if they are empty
         });
-    })(job.x, job.y, job.z);
+    })(job.x, job.y, job.z, jobIndex < priorityChunkCount);
   }
 
   return system;

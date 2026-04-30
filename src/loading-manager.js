@@ -13,10 +13,28 @@ class LoadingManager {
     this.emptyChunks = 0;
     this.totalChunksToMesh = 0;
     this.isLoading = true;
+    this.manualProgress = null;
 
     if (this.loadingDetails) {
       this.loadingDetails.textContent = 'Initializing...';
     }
+  }
+
+  setManualProgress(percent, details) {
+    if (!this.isLoading) {
+      return;
+    }
+
+    this.manualProgress = {
+      percent: Math.max(0, Math.min(100, percent)),
+      details: details || 'Preparing launch...',
+    };
+    this.updateProgress();
+  }
+
+  clearManualProgress() {
+    this.manualProgress = null;
+    this.updateProgress();
   }
 
   setTotalChunks(total) {
@@ -50,6 +68,29 @@ class LoadingManager {
   }
 
   updateProgress() {
+    if (this.manualProgress) {
+      if (this.progressBar) {
+        this.progressBar.style.width = `${this.manualProgress.percent}%`;
+      } else {
+        debugError('Progress bar element not found!');
+      }
+
+      if (this.progressText) {
+        this.progressText.textContent = `${Math.floor(
+          this.manualProgress.percent
+        )}%`;
+      } else {
+        debugError('Progress text element not found!');
+      }
+
+      if (this.loadingDetails) {
+        this.loadingDetails.textContent = this.manualProgress.details;
+      } else {
+        debugError('Loading details element not found!');
+      }
+      return;
+    }
+
     // Calculate loading progress (50% of total)
     const loadingProgress =
       this.totalChunksToLoad > 0
@@ -99,20 +140,12 @@ class LoadingManager {
 
     if (this.loadingDetails) {
       if (this.loadedChunks < this.totalChunksToLoad) {
-        var loadPercent = Math.floor(
-          (this.loadedChunks / this.totalChunksToLoad) * 100
-        );
-        this.loadingDetails.textContent =
-          'Generating terrain... ' + loadPercent + '%';
+        this.loadingDetails.textContent = 'Generating terrain...';
       } else if (
         effectiveChunksToMesh > 0 &&
         this.meshedChunks < effectiveChunksToMesh
       ) {
-        var meshPercent = Math.floor(
-          (this.meshedChunks / effectiveChunksToMesh) * 100
-        );
-        this.loadingDetails.textContent =
-          'Building world... ' + meshPercent + '%';
+        this.loadingDetails.textContent = 'Building world...';
       } else {
         this.loadingDetails.textContent = 'Preparing launch...';
       }

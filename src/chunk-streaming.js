@@ -1650,6 +1650,58 @@ function getChunkLoadPriority(chunkCoords, streamChunk, streamDirection) {
   return chebyshevDistance * 100 + euclideanDistanceSq - forwardProgress * 12;
 }
 
+function getSortedChunkCoordsAround(centerChunk, radius, streamDirection) {
+  const chunkCoords = [];
+
+  for (let x = centerChunk.x - radius; x <= centerChunk.x + radius; x++) {
+    for (let y = centerChunk.y - radius; y <= centerChunk.y + radius; y++) {
+      for (let z = centerChunk.z - radius; z <= centerChunk.z + radius; z++) {
+        chunkCoords.push({ x, y, z });
+      }
+    }
+  }
+
+  chunkCoords.sort(function (a, b) {
+    return (
+      getChunkLoadPriority(a, centerChunk, streamDirection) -
+      getChunkLoadPriority(b, centerChunk, streamDirection)
+    );
+  });
+
+  return chunkCoords;
+}
+
+function applyTemporaryStartupBudgets(chunkManager, options) {
+  if (!options) {
+    return null;
+  }
+
+  const originalBudgets = {
+    maxConcurrentChunkLoads: chunkManager.maxConcurrentChunkLoads,
+    maxChunkMeshesPerFrame: chunkManager.maxChunkMeshesPerFrame,
+  };
+
+  if (typeof options.maxConcurrentChunkLoads === 'number') {
+    chunkManager.maxConcurrentChunkLoads = options.maxConcurrentChunkLoads;
+  }
+
+  if (typeof options.maxChunkMeshesPerFrame === 'number') {
+    chunkManager.maxChunkMeshesPerFrame = options.maxChunkMeshesPerFrame;
+  }
+
+  return originalBudgets;
+}
+
+function restoreStartupBudgets(chunkManager, originalBudgets) {
+  if (!originalBudgets) {
+    return;
+  }
+
+  chunkManager.maxConcurrentChunkLoads =
+    originalBudgets.maxConcurrentChunkLoads;
+  chunkManager.maxChunkMeshesPerFrame = originalBudgets.maxChunkMeshesPerFrame;
+}
+
 function reprioritizePendingChunkLoads(
   chunkManager,
   streamChunk,
@@ -1738,35 +1790,31 @@ function updateChunkShadowCasting(chunkManager, playerChunk) {
   }
 }
 
-export async function loadChunksAround(chunkManager, centerPosition, radius) {
+export async function loadChunksAround(
+  chunkManager,
+  centerPosition,
+  radius,
+  options = {}
+) {
   const chunkRadius =
     typeof radius === 'number' ? radius : chunkManager.loadRadius;
   const centerChunk = getChunkCoordsFromPosition(
     chunkManager.world,
     centerPosition
   );
-  const chunkKeys = [];
+  const startupBudgets = applyTemporaryStartupBudgets(chunkManager, options);
 
   try {
-    for (
-      let x = centerChunk.x - chunkRadius;
-      x <= centerChunk.x + chunkRadius;
-      x++
-    ) {
-      for (
-        let y = centerChunk.y - chunkRadius;
-        y <= centerChunk.y + chunkRadius;
-        y++
-      ) {
-        for (
-          let z = centerChunk.z - chunkRadius;
-          z <= centerChunk.z + chunkRadius;
-          z++
-        ) {
-          chunkKeys.push(chunkKey(x, y, z));
-          queueChunkLoad(chunkManager, { x, y, z });
-        }
-      }
+    const chunkCoords = getSortedChunkCoordsAround(
+      centerChunk,
+      chunkRadius,
+      options.streamDirection
+    );
+    const chunkKeys = [];
+
+    for (const coords of chunkCoords) {
+      chunkKeys.push(chunkKey(coords.x, coords.y, coords.z));
+      queueChunkLoad(chunkManager, coords);
     }
 
     while (!areChunksLoadedForStartup(chunkManager, chunkKeys)) {
@@ -1781,6 +1829,68 @@ export async function loadChunksAround(chunkManager, centerPosition, radius) {
     }
   } catch (error) {
     debugError('Failed to load initial chunks:', error);
+  } finally {
+    restoreStartupBudgets(chunkManager, startupBudgets);
+  }
+}
+
+export async function warmupChunksAround(
+  chunkManager,
+  centerPosition,
+  radius,
+  budgetMs,
+  options = {}
+) {
+  const chunkRadius =
+    typeof radius === 'number' ? radius : chunkManager.loadRadius;
+  const deadline =
+    performance.now() + (typeof budgetMs === 'number' ? budgetMs : 0);
+  const centerChunk = getChunkCoordsFromPosition(
+    chunkManager.world,
+    centerPosition
+  );
+  const startupBudgets = applyTemporaryStartupBudgets(chunkManager, options);
+
+  try {
+    const chunkCoords = getSortedChunkCoordsAround(
+      centerChunk,
+      chunkRadius,
+      options.streamDirection
+    );
+
+    for (const coords of chunkCoords) {
+      queueChunkLoad(chunkManager, coords);
+    }
+
+    while (performance.now() < deadline) {
+      if (typeof options.onProgress === 'function') {
+        options.onProgress(
+          1 -
+            Math.max(0, deadline - performance.now()) /
+              Math.max(1, typeof budgetMs === 'number' ? budgetMs : 1)
+        );
+      }
+
+      if (
+        chunkManager.pendingChunkLoads.length === 0 &&
+        chunkManager.activeChunkLoads === 0 &&
+        chunkManager.pendingChunkMeshes.length === 0
+      ) {
+        break;
+      }
+
+      processChunkLoadQueue(chunkManager);
+      processChunkMeshQueue(chunkManager);
+      await waitForNextStartupLoadTick();
+    }
+
+    if (typeof options.onProgress === 'function') {
+      options.onProgress(1);
+    }
+  } catch (error) {
+    debugWarn('Failed to warm up startup chunks:', error);
+  } finally {
+    restoreStartupBudgets(chunkManager, startupBudgets);
   }
 }
 

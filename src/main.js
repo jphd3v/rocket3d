@@ -15,6 +15,7 @@ import * as Tone from 'tone';
 import {
   createChunkManagerWithTerrain,
   loadChunksAround,
+  warmupChunksAround,
 } from './chunk-streaming.js';
 import { CHUNK_SIZE_VOXELS, WORLD_UNITS_PER_VOXEL } from './world-units.js';
 import { getChunkWorldSize } from './voxel.js';
@@ -22,13 +23,18 @@ import {
   INITIAL_LOAD_RADIUS,
   SOUNDTRACK_VOLUME,
   START_POSITION,
+  STARTUP_FAR_SHELL_BUDGET_MS,
+  STARTUP_FAR_SHELL_PRIORITY_SHELLS,
+  STARTUP_MID_LOD_BUDGET_MS,
+  STARTUP_MID_LOD_PRIORITY_CHUNKS,
+  STARTUP_WARMUP_BUDGET_MS,
+  STARTUP_WARMUP_RADIUS,
   STREAM_LOAD_RADIUS,
 } from './game-config.js';
 import { getActiveLevel } from './levels/index.js';
 import {
   createFarShellSystemAsync,
   createMidLodSystemAsync,
-  createStartupPreviewLodAsync,
 } from './lod/far-visual-shell.js';
 import { DEBUG, debugLog, debugWarn, debugError } from './debug.js';
 
@@ -48,6 +54,89 @@ function setupWorld({ chunkSize = CHUNK_SIZE_VOXELS }) {
   const world = createSparseWorld(chunkSize, WORLD_UNITS_PER_VOXEL);
 
   return world;
+}
+
+function delay(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForStartupBudget(
+  promise,
+  budgetMs,
+  loadingManager,
+  startPercent,
+  endPercent,
+  details
+) {
+  var complete = false;
+  promise.then(function () {
+    complete = true;
+  });
+
+  var startTime = performance.now();
+  var deadline = startTime + budgetMs;
+
+  while (!complete && performance.now() < deadline) {
+    var progress = (performance.now() - startTime) / Math.max(1, budgetMs);
+    loadingManager.setManualProgress(
+      startPercent + (endPercent - startPercent) * progress,
+      details
+    );
+    await delay(100);
+  }
+
+  loadingManager.setManualProgress(endPercent, details + ' complete');
+}
+
+function getStartupPosition(activeLevel) {
+  if (activeLevel && activeLevel.startingChamber) {
+    return activeLevel.startingChamber.center;
+  }
+
+  return START_POSITION;
+}
+
+function getStartupDirection(activeLevel) {
+  if (!activeLevel || !activeLevel.graph || !activeLevel.startingChamber) {
+    return null;
+  }
+
+  var from = activeLevel.startingChamber.center;
+  var to = null;
+
+  for (var i = 0; i < activeLevel.graph.tunnels.length; i++) {
+    var tunnel = activeLevel.graph.tunnels[i];
+    if (tunnel.from !== 'spawn') {
+      continue;
+    }
+
+    for (var j = 0; j < activeLevel.graph.chambers.length; j++) {
+      var chamber = activeLevel.graph.chambers[j];
+      if (chamber.id === tunnel.to) {
+        to = chamber.center;
+        break;
+      }
+    }
+    break;
+  }
+
+  if (!to) {
+    return null;
+  }
+
+  var direction = new THREE.Vector3(
+    to.x - from.x,
+    to.y - from.y,
+    to.z - from.z
+  );
+
+  if (direction.lengthSq() === 0) {
+    return null;
+  }
+
+  return direction.normalize();
 }
 
 async function main() {
@@ -115,6 +204,8 @@ async function main() {
 
     // Determine active level and derive seed
     var activeLevel = getActiveLevel();
+    var startupPosition = getStartupPosition(activeLevel);
+    var startupDirection = getStartupDirection(activeLevel);
     var levelSeedString = DEFAULT_LEVEL_SEED + ':' + activeLevel.seed;
     var levelSeedNumber = hashLevelSeed(levelSeedString);
 
@@ -250,32 +341,103 @@ async function main() {
       lod2Lod3Overlap: 784 - 768,
     });
 
-    var startupPreviewLodPromise = createStartupPreviewLodAsync(
-      chunkManager,
-      fullChunkWorldRadius,
-      {
-        blockSize: 16,
-        opacity: 0.28,
-        tileWorldSize: 128,
-      }
-    ).catch(function (error) {
-      debugWarn('[StartupPreviewLOD] failed:', error);
-      return null;
+    loadingManager.setManualProgress(2, 'Initializing terrain workers...');
+    await loadChunksAround(chunkManager, startupPosition, INITIAL_LOAD_RADIUS, {
+      maxConcurrentChunkLoads: 8,
+      maxChunkMeshesPerFrame: 8,
+      streamDirection: startupDirection,
     });
+    loadingManager.setManualProgress(25, 'Core launch area complete');
 
-    await loadChunksAround(chunkManager, START_POSITION, INITIAL_LOAD_RADIUS);
-    var startupPreviewLodGroup = await startupPreviewLodPromise;
     var lodSystems = {
       startupPreview: null,
       midLod: null,
     };
-    if (startupPreviewLodGroup) {
-      scene.add(startupPreviewLodGroup);
-      lodSystems.startupPreview = startupPreviewLodGroup;
+    var startupMidLodSystem = createMidLodSystemAsync(
+      chunkManager,
+      chunkWorldSize,
+      chunkManager.generator.playfieldBounds,
+      midLodOuterWorldRadius,
+      startupPosition,
+      {
+        priorityChunkCount: STARTUP_MID_LOD_PRIORITY_CHUNKS,
+        priorityDirection: startupDirection,
+      }
+    );
+    if (startupMidLodSystem) {
+      lodSystems.midLod = startupMidLodSystem;
+      await waitForStartupBudget(
+        startupMidLodSystem.priorityChunksReady,
+        STARTUP_MID_LOD_BUDGET_MS,
+        loadingManager,
+        25,
+        80,
+        'Building near LOD'
+      );
     }
 
+    var fogOptions = scene.fog
+      ? {
+          color: scene.fog.color.getHex(),
+          near: scene.fog.near,
+          far: scene.fog.far,
+        }
+      : null;
+    var startupFarShellGroup = null;
+    if (
+      activeLevel.farShell &&
+      activeLevel.farShell.enabled &&
+      activeLevel.farShell.shells
+    ) {
+      startupFarShellGroup = createFarShellSystemAsync(
+        chunkManager,
+        activeLevel.farShell.shells,
+        fogOptions,
+        minimumFarShellDistance,
+        {
+          priorityShellCount: STARTUP_FAR_SHELL_PRIORITY_SHELLS,
+        }
+      );
+      await waitForStartupBudget(
+        startupFarShellGroup.userData.priorityShellsReady,
+        STARTUP_FAR_SHELL_BUDGET_MS,
+        loadingManager,
+        80,
+        88,
+        'Building far terrain shell'
+      );
+    }
+
+    loadingManager.setManualProgress(88, 'Warming outer terrain...');
+    await warmupChunksAround(
+      chunkManager,
+      startupPosition,
+      STARTUP_WARMUP_RADIUS,
+      STARTUP_WARMUP_BUDGET_MS,
+      {
+        maxConcurrentChunkLoads: 8,
+        maxChunkMeshesPerFrame: 8,
+        streamDirection: startupDirection,
+        onProgress: function (progress) {
+          loadingManager.setManualProgress(
+            88 + 6 * progress,
+            'Warming outer terrain...'
+          );
+        },
+      }
+    );
+    loadingManager.setManualProgress(94, 'Outer terrain warmup complete');
+
     const detailProps = await createDetailProps(chunkManager.generator, world);
+    loadingManager.setManualProgress(98, 'Preparing launch...');
     scene.add(detailProps);
+    if (startupMidLodSystem) {
+      scene.add(startupMidLodSystem.group);
+      startupMidLodSystem.syncVisibility(chunkManager, rocket.position);
+    }
+    if (startupFarShellGroup) {
+      scene.add(startupFarShellGroup);
+    }
     scene.add(rocket);
     for (let i = 0; i < aiRockets.length; i++) {
       scene.add(aiRockets[i]);
@@ -338,49 +500,9 @@ async function main() {
 
     // Hide loading screen and start the game
     setTimeout(function () {
+      loadingManager.setManualProgress(100, 'Launch ready');
       loadingManager.hideLoadingScreen();
       gameLoop();
-
-      // Initialize LOD systems in the background after the game has started
-      setTimeout(function () {
-        // Build mid-LOD (blockSize:2) first because it covers the visible gap
-        // just beyond full-detail chunks.
-        var midLodSystem = createMidLodSystemAsync(
-          chunkManager,
-          chunkWorldSize,
-          chunkManager.generator.playfieldBounds,
-          midLodOuterWorldRadius,
-          rocket.position
-        );
-        if (midLodSystem) {
-          scene.add(midLodSystem.group);
-          lodSystems.midLod = midLodSystem;
-        }
-
-        if (
-          activeLevel.farShell &&
-          activeLevel.farShell.enabled &&
-          activeLevel.farShell.shells
-        ) {
-          var fogOptions = scene.fog
-            ? {
-                color: scene.fog.color.getHex(),
-                near: scene.fog.near,
-                far: scene.fog.far,
-              }
-            : null;
-
-          var farShellGroup = createFarShellSystemAsync(
-            chunkManager,
-            activeLevel.farShell.shells,
-            fogOptions,
-            minimumFarShellDistance
-          );
-          if (farShellGroup) {
-            scene.add(farShellGroup);
-          }
-        }
-      }, 10);
     }, 100);
   } catch (error) {
     debugError('Failed to start game:', error);

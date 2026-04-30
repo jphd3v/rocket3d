@@ -1446,9 +1446,14 @@ function updateUI(
 
   // LOD loading status
   if (midLodSystem) {
-    const midPercent = Math.floor(
+    let midPercent = Math.floor(
       (midLodSystem.loadedChunks / midLodSystem.totalChunks) * 100
     );
+    if (midLodSystem.priorityTotalChunks > 0) {
+      midPercent = Math.floor(
+        (midLodSystem.priorityChunks / midLodSystem.priorityTotalChunks) * 100
+      );
+    }
     const midEl = document.getElementById('hud-mid-lod');
     midEl.textContent = midPercent + '%';
     if (midPercent >= 100) {

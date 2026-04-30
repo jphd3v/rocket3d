@@ -802,11 +802,32 @@ export function createTerrainGenerator(config = {}) {
           continue;
         }
 
-        const dx = (x - opening.center.x) / opening.radius.x;
-        const dz = (z - opening.center.z) / opening.radius.z;
+        var angle = opening.angle || 0;
+        var cos = Math.cos(angle);
+        var sin = Math.sin(angle);
+        var relX = x - opening.center.x;
+        var relZ = z - opening.center.z;
+        var localX = relX * cos + relZ * sin;
+        var localZ = -relX * sin + relZ * cos;
+        var heightT = clamp(
+          (y - opening.center.y) / Math.max(1, opening.topY - opening.center.y),
+          0,
+          1
+        );
+        var flare = opening.flare || 0;
+        var radiusX = opening.radius.x * (1 + heightT * flare);
+        var radiusZ = opening.radius.z * (1 + heightT * flare);
+        var dx = localX / radiusX;
+        var dz = localZ / radiusZ;
         const radial = dx * dx + dz * dz;
+        var edgeNoise = this.noise.roughness(
+          x * 0.033 * finalConfig.voxelSize + 17.4,
+          y * 0.019 * finalConfig.voxelSize,
+          z * 0.033 * finalConfig.voxelSize - 6.2
+        );
+        var threshold = 1 + (opening.roughness || 0) * edgeNoise;
 
-        if (radial <= 1) {
+        if (radial <= threshold) {
           return true;
         }
       }
@@ -836,6 +857,41 @@ export function createTerrainGenerator(config = {}) {
         const horizontalDistSq = dx * dx + dz * dz;
         const taper = 1.0 - Math.pow(Math.abs(dy), 6);
         return Math.abs(dy) <= 1.0 && horizontalDistSq <= taper + noise;
+      }
+
+      if (kind === 'erodedPillar') {
+        if (Math.abs(dy) > 1.0) return false;
+        const horizontalDistSq = dx * dx + dz * dz;
+        const heightT = (dy + 1) * 0.5;
+        const neck = Math.sin(Math.PI * heightT);
+        const ledges = Math.max(0, Math.sin(heightT * Math.PI * 7.0)) * 0.08;
+        const profile = 0.64 + Math.pow(Math.abs(dy), 1.8) * 0.34 + ledges;
+        const chipNoise =
+          this.noise.roughness(
+            x * 0.12 * finalConfig.voxelSize + 3.1,
+            y * 0.05 * finalConfig.voxelSize,
+            z * 0.12 * finalConfig.voxelSize - 9.6
+          ) * 0.14;
+
+        return horizontalDistSq <= profile * profile + chipNoise - neck * 0.04;
+      }
+
+      if (kind === 'archSlab') {
+        if (dy > 0.95 || dy < -1.0) return false;
+        const horizontalDistSq = dx * dx + dz * dz;
+        const lowerCut = Math.max(0, -dy - 0.18);
+        const profile = 1.0 - lowerCut * 0.34;
+
+        return horizontalDistSq <= profile * profile + noise;
+      }
+
+      if (kind === 'ceilingLip') {
+        if (dy > 0.8 || dy < -0.75) return false;
+        const horizontalDistSq = dx * dx + dz * dz;
+        const underside = Math.max(0, -dy);
+        const profile = 1.05 - underside * 0.42;
+
+        return horizontalDistSq <= profile * profile + noise * 1.4;
       }
 
       if (kind === 'island') {

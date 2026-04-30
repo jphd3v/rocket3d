@@ -1,7 +1,8 @@
 import { createChamber, createTunnel } from '../terrain-generation.js';
 
-var SPAWN = { x: 160, y: 160, z: 120 };
+var SPAWN = { x: 285, y: 168, z: 258 };
 var MAIN = { x: 565, y: 185, z: 565 };
+var MAIN_FLOOR_Y = MAIN.y - 145;
 
 var MOSS = 'moss';
 var ICE = 'ice';
@@ -44,44 +45,164 @@ function buildChambers() {
     createChamber('farLoadVista', 565, 235, 1270, 145, 62, 92, MOSS)
   );
 
-  // Major line-of-sight breakers: selective spires and formations.
+  // Major line-of-sight breakers: eroded pillars, arch remnants, and ledges.
   addSolid(
     chambers,
-    createChamber('spireMain', 545, 185, 610, 34, 165, 30, MOSS, 'spire')
+    createChamber(
+      'vaultPillarWest',
+      405,
+      MAIN_FLOOR_Y + 132,
+      575,
+      42,
+      132,
+      34,
+      MOSS,
+      'erodedPillar'
+    )
   );
   addSolid(
     chambers,
-    createChamber('spireMinor', 390, 160, 520, 14, 65, 14, MOSS, 'spire')
+    createChamber(
+      'vaultPillarCenter',
+      565,
+      MAIN_FLOOR_Y + 138,
+      650,
+      52,
+      138,
+      42,
+      MOSS,
+      'erodedPillar'
+    )
   );
   addSolid(
     chambers,
-    createChamber('lavaSpire', 742, 152, 700, 22, 85, 18, AMBER, 'spire')
+    createChamber(
+      'vaultPillarEast',
+      735,
+      MAIN_FLOOR_Y + 128,
+      660,
+      44,
+      128,
+      36,
+      MOSS,
+      'erodedPillar'
+    )
   );
   addSolid(
     chambers,
-    createChamber('eastOverhang', 820, 260, 545, 88, 22, 38, MACHINE, 'island')
+    createChamber(
+      'lowerBrokenPier',
+      625,
+      MAIN_FLOOR_Y + 58,
+      505,
+      24,
+      58,
+      22,
+      MOSS,
+      'erodedPillar'
+    )
   );
   addSolid(
     chambers,
-    createChamber('northBridgeLeft', 440, 276, 760, 70, 18, 22, MOSS, 'island')
+    createChamber(
+      'lavaButtress',
+      770,
+      MAIN_FLOOR_Y + 74,
+      725,
+      36,
+      74,
+      30,
+      AMBER,
+      'erodedPillar'
+    )
   );
   addSolid(
     chambers,
-    createChamber('northBridgeRight', 700, 278, 790, 76, 18, 24, MOSS, 'island')
+    createChamber('westArchCap', 470, 302, 625, 82, 22, 30, MOSS, 'archSlab')
+  );
+  addSolid(
+    chambers,
+    createChamber('eastArchCap', 680, 304, 675, 88, 22, 32, MOSS, 'archSlab')
+  );
+  addSolid(
+    chambers,
+    createChamber('farArchCap', 565, 316, 830, 106, 22, 30, MOSS, 'archSlab')
+  );
+  addSolid(
+    chambers,
+    createChamber('eastOverhang', 845, 262, 545, 92, 24, 42, MACHINE, 'island')
+  );
+  addSolid(
+    chambers,
+    createChamber(
+      'northBridgeLeft',
+      430,
+      282,
+      770,
+      82,
+      20,
+      28,
+      MOSS,
+      'ceilingLip'
+    )
+  );
+  addSolid(
+    chambers,
+    createChamber(
+      'northBridgeRight',
+      715,
+      284,
+      790,
+      86,
+      20,
+      30,
+      MOSS,
+      'ceilingLip'
+    )
   );
 
-  // Ceiling teeth near the sky holes keep the opening irregular.
+  // Ceiling lips near the skylight keep the opening torn and asymmetric.
   addSolid(
     chambers,
-    createChamber('ceilingToothWest', 430, 302, 620, 22, 46, 24, MOSS, 'spire')
+    createChamber(
+      'ceilingLipWest',
+      412,
+      330,
+      520,
+      62,
+      18,
+      34,
+      MOSS,
+      'ceilingLip'
+    )
   );
   addSolid(
     chambers,
-    createChamber('ceilingToothEast', 695, 310, 640, 24, 48, 26, MOSS, 'spire')
+    createChamber(
+      'ceilingLipEast',
+      705,
+      334,
+      555,
+      72,
+      18,
+      38,
+      MOSS,
+      'ceilingLip'
+    )
   );
   addSolid(
     chambers,
-    createChamber('ceilingToothFar', 570, 324, 805, 26, 44, 22, MOSS, 'spire')
+    createChamber(
+      'ceilingFangFar',
+      585,
+      318,
+      800,
+      36,
+      42,
+      28,
+      MOSS,
+      'erodedPillar'
+    )
   );
 
   return chambers;
@@ -114,39 +235,54 @@ function buildTunnels() {
 }
 
 function buildSkyOpenings() {
-  var baseY = MAIN.y + 128;
-  var topY = MAIN.y + 286;
+  var baseY = MAIN.y + 116;
+  var topY = MAIN.y + 320;
 
   return [
     {
       chamberId: 'skyVault',
-      center: { x: MAIN.x - 45, y: baseY, z: MAIN.z + 28 },
-      radius: { x: 74, y: 0, z: 58 },
+      center: { x: MAIN.x - 30, y: baseY, z: MAIN.z + 20 },
+      radius: { x: 128, y: 0, z: 54 },
       topY: topY,
+      angle: -0.28,
+      flare: 0.18,
+      roughness: 0.14,
     },
     {
       chamberId: 'skyVault',
-      center: { x: MAIN.x + 48, y: baseY + 6, z: MAIN.z + 78 },
-      radius: { x: 56, y: 0, z: 46 },
+      center: { x: MAIN.x + 98, y: baseY + 4, z: MAIN.z + 84 },
+      radius: { x: 86, y: 0, z: 42 },
       topY: topY + 12,
+      angle: 0.42,
+      flare: 0.16,
+      roughness: 0.13,
     },
     {
       chamberId: 'skyVault',
-      center: { x: MAIN.x + 5, y: baseY - 8, z: MAIN.z - 90 },
-      radius: { x: 44, y: 0, z: 34 },
-      topY: topY - 18,
+      center: { x: MAIN.x - 122, y: baseY + 2, z: MAIN.z - 40 },
+      radius: { x: 52, y: 0, z: 32 },
+      topY: topY - 8,
+      angle: 0.15,
+      flare: 0.12,
+      roughness: 0.15,
     },
     {
       chamberId: 'farSkyMouth',
-      center: { x: 565, y: 288, z: 1015 },
-      radius: { x: 68, y: 0, z: 52 },
-      topY: 485,
+      center: { x: 565, y: 280, z: 1015 },
+      radius: { x: 116, y: 0, z: 62 },
+      topY: 520,
+      angle: -0.18,
+      flare: 0.2,
+      roughness: 0.16,
     },
     {
       chamberId: 'farLoadVista',
-      center: { x: 565, y: 306, z: 1270 },
-      radius: { x: 88, y: 0, z: 58 },
-      topY: 520,
+      center: { x: 565, y: 292, z: 1270 },
+      radius: { x: 142, y: 0, z: 64 },
+      topY: 548,
+      angle: 0.2,
+      flare: 0.22,
+      roughness: 0.14,
     },
   ];
 }

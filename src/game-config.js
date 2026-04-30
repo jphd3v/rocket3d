@@ -1,4 +1,10 @@
 export const START_POSITION = { x: 160, y: 160, z: 160 };
-export const INITIAL_LOAD_RADIUS = 1;
+export const INITIAL_LOAD_RADIUS = 2;
 export const STREAM_LOAD_RADIUS = 3;
+export const STARTUP_WARMUP_RADIUS = 5;
+export const STARTUP_WARMUP_BUDGET_MS = 30000;
+export const STARTUP_MID_LOD_PRIORITY_CHUNKS = 3600;
+export const STARTUP_MID_LOD_BUDGET_MS = 90000;
+export const STARTUP_FAR_SHELL_PRIORITY_SHELLS = 1;
+export const STARTUP_FAR_SHELL_BUDGET_MS = 8000;
 export const SOUNDTRACK_VOLUME = 0.16;
