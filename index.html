@@ -1,0 +1,536 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rocket3D</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        background-color: #000;
+      }
+      #c {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+
+      #vignette {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse at center,
+          transparent 50%,
+          rgba(0, 0, 0, 0.35) 100%
+        );
+        z-index: 50;
+      }
+
+      /* UI Overlay Layer - pointer-events: none so clicks pass through to game */
+      #ui-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 100;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #cccccc;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+      }
+
+      /* Game Health - minimal bottom-left display */
+      #game-health {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        font-family: 'Courier New', monospace;
+        font-size: 15px;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        opacity: 0.55;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+        pointer-events: none;
+        display: block;
+      }
+
+      .game-health-good {
+        color: #44ee66;
+      }
+      .game-health-warning {
+        color: #eecc44;
+      }
+      .game-health-danger {
+        color: #ee4444;
+      }
+
+      /* Stats Panel - bottom left (hidden in game mode) */
+      #stats-panel {
+        display: none;
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(10, 18, 16, 0.6);
+        border: 1px solid rgba(185, 255, 220, 0.12);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(4px);
+        font-size: 11px;
+        line-height: 1.35;
+        color: #e0eee8;
+      }
+
+      /* Options Panel - top right (hidden in game mode) */
+      #options-panel {
+        display: none;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(10, 18, 16, 0.6);
+        border: 1px solid rgba(185, 255, 220, 0.12);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(4px);
+        min-width: 240px;
+        text-align: right;
+        font-size: 11px;
+        line-height: 1.35;
+        color: #e0eee8;
+      }
+
+      /* HUD - central reticle/spatial locator */
+      #hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: none;
+      }
+
+      /* Menus Layer - visible only when paused, captures pointer events */
+      #menus {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: auto;
+        z-index: 200;
+        display: none;
+      }
+
+      /* Toast Notification */
+      #toast-container {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        max-width: min(620px, calc(100vw - 40px));
+        padding: 8px 16px;
+        border-radius: 6px;
+        background: rgba(10, 18, 16, 0.72);
+        border: 1px solid rgba(140, 220, 200, 0.25);
+        color: #c8eee0;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        font-weight: bold;
+        letter-spacing: 0.06em;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+        z-index: 150;
+        opacity: 0;
+        transform: translateY(8px) scale(0.95);
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+        backdrop-filter: blur(4px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #toast-container.has-legend {
+        padding: 10px 14px;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+      }
+
+      .toast-message {
+        white-space: nowrap;
+      }
+
+      .toast-legend {
+        display: grid;
+        grid-template-columns: repeat(4, auto);
+        gap: 6px 12px;
+        margin-top: 8px;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: #d8fff0;
+      }
+
+      .toast-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .toast-legend-swatch {
+        width: 11px;
+        height: 11px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
+      }
+
+      .toast-legend-label {
+        white-space: nowrap;
+      }
+
+      @media (max-width: 560px) {
+        .toast-legend {
+          grid-template-columns: repeat(2, auto);
+        }
+      }
+
+      #toast-container.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      #pause-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 4rem;
+        font-weight: bold;
+        color: #ffffff;
+        text-shadow:
+          0 0 20px rgba(255, 255, 255, 0.5),
+          0 0 40px rgba(255, 255, 255, 0.3);
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        animation: pause-pulse 1.2s ease-in-out infinite;
+        user-select: none;
+      }
+
+      @keyframes pause-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+        50% {
+          opacity: 0.6;
+          transform: translate(-50%, -50%) scale(1.05);
+        }
+      }
+
+      .panel-label {
+        font-weight: bold;
+        letter-spacing: 0.08em;
+      }
+
+      .value-health {
+        color: #00ff00;
+      }
+      .value-health-warning {
+        color: #ffff00;
+      }
+      .value-health-danger {
+        color: #ff0000;
+      }
+
+      .value-ai {
+        color: #ffed6a;
+      }
+      .value-ai-warning {
+        color: #ffaa38;
+      }
+      .value-ai-danger {
+        color: #ff6666;
+      }
+      .value-ai-off {
+        color: #888888;
+      }
+
+      .value-ai2 {
+        color: #6a9fff;
+      }
+      .value-ai2-warning {
+        color: #ffaa38;
+      }
+      .value-ai2-danger {
+        color: #ff6666;
+      }
+      .value-ai2-off {
+        color: #888888;
+      }
+
+      .value-camera {
+        color: #7cdfff;
+      }
+
+      .value-on {
+        color: #fff0a8;
+      }
+      .value-off {
+        color: #888888;
+      }
+
+      .panel-title {
+        font-weight: bold;
+        letter-spacing: 0.08em;
+      }
+
+      /* Loading Screen Styles */
+      #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0a0e0d;
+        background-image:
+          radial-gradient(
+            ellipse at 30% 70%,
+            rgba(20, 50, 35, 0.6) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 70% 30%,
+            rgba(15, 35, 45, 0.4) 0%,
+            transparent 50%
+          );
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        font-family: 'Courier New', monospace;
+        color: #ffffff;
+      }
+
+      .loading-title {
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 2rem;
+        text-transform: uppercase;
+        letter-spacing: 0.25em;
+        color: #ffffff;
+        text-shadow: 0 0 12px rgba(140, 220, 200, 0.3);
+      }
+
+      .progress-container {
+        width: 60%;
+        max-width: 480px;
+        height: 24px;
+        background-color: #0f1412;
+        border: 1px solid rgba(120, 180, 160, 0.25);
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+        box-shadow:
+          0 0 16px rgba(0, 0, 0, 0.6),
+          inset 0 0 8px rgba(0, 0, 0, 0.4);
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(
+          90deg,
+          #1a3a2c 0%,
+          #2d6b4a 40%,
+          #3a8a5c 60%,
+          #2d6b4a 100%
+        );
+        border-radius: 2px;
+        transition: width 0.15s linear;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(
+          90deg,
+          transparent 0px,
+          transparent 22px,
+          rgba(0, 0, 0, 0.35) 22px,
+          rgba(0, 0, 0, 0.35) 24px
+        );
+      }
+
+      .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #ffffff;
+        text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+        letter-spacing: 0.08em;
+        z-index: 1;
+      }
+
+      .loading-details {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        color: #7a9a8e;
+        text-align: center;
+        line-height: 1.5;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loading-title">Rocket3D</div>
+      <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+        <div class="progress-text" id="progress-text">0%</div>
+      </div>
+      <div class="loading-details" id="loading-details">Initializing...</div>
+    </div>
+
+    <canvas id="c"></canvas>
+
+    <!-- Vignette overlay -->
+    <div id="vignette"></div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-overlay">
+      <!-- Game Health - minimal game mode display -->
+      <div id="game-health" class="game-health-good">HP 100</div>
+
+      <!-- Stats Panel - bottom left (dev mode only) -->
+      <div id="stats-panel">
+        <div>Position: <span id="hud-position">0, 0, 0</span></div>
+        <div>
+          Health: <span id="hud-health" class="value-health">100%</span>
+        </div>
+        <div>AI: <span id="hud-ai" class="value-ai-off">OFF</span></div>
+        <div>AI2: <span id="hud-ai2" class="value-ai2-off">OFF</span></div>
+        <div>Loaded Chunks: <span id="hud-loaded-chunks">0</span></div>
+        <div>Meshed Chunks: <span id="hud-meshed-chunks">0</span></div>
+        <div>Visible Chunks: <span id="hud-visible-chunks">0/0</span></div>
+        <div>Projectiles: <span id="hud-projectiles">0</span></div>
+        <div>Particles: <span id="hud-particles">0</span></div>
+        <div>Raycasts: <span id="hud-raycasts">0</span></div>
+        <div>Voxel Edits: <span id="hud-voxel-edits">0</span></div>
+        <div>Dirty Chunks: <span id="hud-dirty-chunks">0</span></div>
+        <div>Remeshed: <span id="hud-remeshed">0</span></div>
+        <div>Mid-LOD: <span id="hud-mid-lod">0%</span></div>
+        <div>Far Shell: <span id="hud-far-shell">0%</span></div>
+      </div>
+
+      <!-- Options Panel - top right (dev mode only) -->
+      <div id="options-panel">
+        <div class="panel-title">OPTIONS</div>
+        <div>
+          Camera:
+          <span id="hud-camera" class="value-camera">third-person</span>
+        </div>
+        <div id="hud-weapon-row">
+          Weapon: <span id="hud-weapon" class="value-on">-</span>
+        </div>
+        <div>Fullscreen: F to toggle</div>
+        <div>
+          AI: <span id="hud-ai-toggle" class="value-off">OFF</span> (Press I to
+          toggle)
+        </div>
+        <div>
+          HUD: <span id="hud-hud-toggle" class="value-on">ON</span> (Press H to
+          toggle)
+        </div>
+        <div id="hud-crosshair-row">
+          Crosshair: <span id="hud-crosshair-toggle" class="value-on">ON</span>
+          (Press C to toggle)
+        </div>
+        <div id="hud-music-row">
+          Music: <span id="hud-music" class="value-off">OFF</span>
+          <span id="hud-music-detail">(-)</span>
+        </div>
+        <div id="hud-sfx-row">
+          SFX: <span id="hud-sfx" class="value-off">OFF</span>
+          <span id="hud-sfx-detail">(-)</span>
+        </div>
+        <div id="hud-boundaries-row">
+          Boundaries:
+          <span id="hud-boundaries" class="value-off">OFF</span> (Press B to
+          toggle)
+        </div>
+      </div>
+
+      <!-- HUD - central reticle -->
+      <canvas id="hud"></canvas>
+
+      <!-- Source / License link -->
+      <div
+        id="source-link"
+        style="
+          position: absolute;
+          bottom: 4px;
+          right: 6px;
+          font-family: 'Courier New', monospace;
+          font-size: 11px;
+          opacity: 0.45;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+          pointer-events: auto;
+          z-index: 105;
+          color: #c8eee0;
+        "
+      >
+        Copyright &copy; 2026 JPH |
+        <a
+          href="https://github.com/jphd3v/rocket3d"
+          target="_blank"
+          style="color: #c8eee0; text-decoration: none"
+          >SOURCE / LICENSE (AGPLv3)</a
+        >
+      </div>
+    </div>
+
+    <!-- Menus Layer - captures pointer events when visible -->
+    <div id="menus">
+      <div id="pause-text">PAUSED</div>
+    </div>
+
+    <script type="module" src="src/index.js"></script>
+  </body>
+</html>

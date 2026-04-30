@@ -1,0 +1,44 @@
+{
+  "name": "rocket3d",
+  "version": "1.0.0",
+  "description": "A 3D voxel rocket game built with Three.js",
+  "type": "module",
+  "main": "index.js",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.5.0",
+    "prettier": "^3.8.3",
+    "vite": "^8.0.10"
+  },
+  "browserslist": [
+    "last 1 version",
+    "> 1%",
+    "maintained node versions",
+    "not dead"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "format": "prettier --write \"**/*.{js,json,md,css,html}\"",
+    "format:check": "prettier --check \"**/*.{js,json,md,css,html}\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chiptune3": "^0.8.6",
+    "open-simplex-noise": "^2.5.0",
+    "stats.js": "^0.17.0",
+    "three": "0.184.0",
+    "tone": "^15.1.22"
+  }
+}
