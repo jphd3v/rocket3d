@@ -9,6 +9,8 @@ The current version is an early engine-focused release. The goal is to make the
 core voxel world feel worth flying through before adding progression, scoring,
 or campaign structure.
 
+![in-game](image.png)
+
 ## Current Focus
 
 - Third-person rocket flight through large voxel cave spaces
@@ -72,9 +74,11 @@ voxel terrain generation.
 
 Rocket3D is an original open-source game inspired by the feel of 1990s cave-flying arcade games, especially `Wings` (1996) and `AUTS` (1995). It is a fresh implementation from scratch and does not use original game code or assets from those titles.
 
-## License
+## License and copyright
 
 Rocket3D is released under the **GNU Affero General Public License v3.0**. See `LICENSE.txt` for the full text.
+
+Copyright 2026 JPH.
 
 **NO WARRANTY**: This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
