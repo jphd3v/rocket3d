@@ -44,6 +44,8 @@ import {
 import { LOD_DEBUG_COLORS } from './lod/lod-constants.js';
 import { applyLodDistanceFade } from './lod/far-visual-shell.js';
 import { DEBUG } from './debug.js';
+import { initWindField } from './wind-field.js';
+import { initWindParticles } from './wind-particles.js';
 
 function initGameLoop(
   renderer,
@@ -182,6 +184,8 @@ function initGameLoop(
   );
   const updateFlames = initFlameSystem(rocket, scene);
   const updateControlThrusters = initControlThrusters(rocket, scene);
+  const windField = initWindField(activeLevel);
+  const windParticles = initWindParticles(scene);
   function applyPlayerDamage(amount, impactStrength) {
     if (playerSpawnProtected) {
       return null;
@@ -2733,6 +2737,8 @@ function initGameLoop(
           : 0,
       deltaSeconds: INV_MAX_FPS,
     });
+
+    windParticles.update(camera, timer.getElapsed(), deltaSeconds, windField);
 
     const effectivePerspective = cameraState.isTransitioning
       ? cameraState.targetPerspective
