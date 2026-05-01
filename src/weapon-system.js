@@ -304,7 +304,7 @@ function destroyVoxelCluster(
     outerReach = Math.ceil(reach * (1 + 0.35 * edgeJitter));
   }
   const outerReachSq = outerReach * outerReach;
-  const innerReachSq = edgeJitter > 0 ? (reach * 0.65) * (reach * 0.65) : 0;
+  const innerReachSq = edgeJitter > 0 ? reach * 0.65 * (reach * 0.65) : 0;
   var jitteredRadiusSq;
 
   for (let y = centerY - outerReach; y <= centerY + outerReach; y++) {
@@ -326,7 +326,8 @@ function destroyVoxelCluster(
             } else {
               // randomize effective radius per voxel for chaotic edge
               jitteredRadiusSq =
-                reach * reach *
+                reach *
+                reach *
                 (0.65 + Math.random() * 0.7 * edgeJitter) *
                 (0.65 + Math.random() * 0.7 * edgeJitter);
               if (distSq > jitteredRadiusSq) {

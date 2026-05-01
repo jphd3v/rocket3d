@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { initPhysics } from './physics.js';
-import { initFlameSystem } from './flames.js';
+import { initFlameSystem, initControlThrusters } from './flames.js';
 import { initWeaponSystem } from './weapon-system.js';
 import { resetGlobalWeaponBudgets } from './weapon-system.js';
 import { initAiPlayer } from './ai-player.js';
@@ -181,6 +181,7 @@ function initGameLoop(
     audioSystem
   );
   const updateFlames = initFlameSystem(rocket, scene);
+  const updateControlThrusters = initControlThrusters(rocket, scene);
   function applyPlayerDamage(amount, impactStrength) {
     if (playerSpawnProtected) {
       return null;
@@ -217,11 +218,13 @@ function initGameLoop(
       null
     );
     const updateAiFlames = initFlameSystem(aiRocket, scene);
+    const updateAiControlThrusters = initControlThrusters(aiRocket, scene);
 
     const entry = {
       rocket: aiRocket,
       physics: updateAiPhysics,
       flames: updateAiFlames,
+      controlThrusters: updateAiControlThrusters,
       index: index,
       destroyed: true,
       respawnAtTime: 0,
@@ -2350,6 +2353,7 @@ function initGameLoop(
         actionInputs.fire = 0;
       }
       updateFlames(actionInputs, physicsState); // update flame particles
+      updateControlThrusters(actionInputs); // update control thruster particles
       var weaponUiState = updateWeaponSystem(
         actionInputs,
         currentTime,
@@ -2407,6 +2411,7 @@ function initGameLoop(
           entry.previousHealth =
             entry.physicsState.health == null ? 100 : entry.physicsState.health;
           entry.flames(entry.inputs, entry.physicsState);
+          entry.controlThrusters(entry.inputs);
           entry.updateWeaponSystem(entry.inputs, currentTime, deltaSeconds);
 
           if (audioSystem) {

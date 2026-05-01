@@ -364,3 +364,145 @@ export function initFlameSystem(rocket, scene) {
     updateSmokeParticles();
   };
 }
+
+export function initControlThrusters(rocket, scene) {
+  var particles = [];
+
+  var thrusterGeometry = new THREE.OctahedronGeometry(0.09, 0);
+
+  // Four RCS anchors at outer wing/arm tips
+  var leftTopPos = new THREE.Vector3(-2.7, 0.5, -4.0);
+  var leftBottomPos = new THREE.Vector3(-2.7, -0.5, -4.0);
+  var rightTopPos = new THREE.Vector3(2.7, 0.5, -4.0);
+  var rightBottomPos = new THREE.Vector3(2.7, -0.5, -4.0);
+
+  var worldPos = new THREE.Vector3();
+  var particleVel = new THREE.Vector3();
+  var localDir = new THREE.Vector3();
+
+  function createControlMaterial() {
+    return new THREE.MeshBasicMaterial({
+      color: 0xffbb55,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+  }
+
+  function spawnThrusterParticle(localPos, worldVel, strength) {
+    var material = createControlMaterial();
+    var particle = new THREE.Mesh(thrusterGeometry, material);
+
+    transformRocketLocalPoint(rocket, localPos, worldPos);
+    particle.position.copy(worldPos);
+    particle.position.x += (Math.random() - 0.5) * 0.12;
+    particle.position.y += (Math.random() - 0.5) * 0.12;
+    particle.position.z += (Math.random() - 0.5) * 0.12;
+
+    particleVel.copy(worldVel).multiplyScalar(strength * 0.45 + 0.02);
+
+    particle.userData = {
+      velocity: particleVel.clone(),
+      life: Math.round(1 + strength * 4),
+      maxLife: Math.round(1 + strength * 4),
+      spin: (Math.random() - 0.5) * 0.18,
+      growth: 0.015,
+      drag: 0.9,
+      scale: 0.15 + strength * 0.35,
+    };
+    particle.scale.setScalar(particle.userData.scale);
+
+    particles.push(particle);
+    scene.add(particle);
+  }
+
+  function updateControlParticles() {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.userData.life--;
+      p.position.add(p.userData.velocity);
+      p.userData.velocity.multiplyScalar(p.userData.drag);
+      p.rotation.z += p.userData.spin;
+      p.scale.multiplyScalar(1 + p.userData.growth);
+
+      if (p.material) {
+        var lifeFrac = p.userData.life / p.userData.maxLife;
+        p.material.opacity = lifeFrac * lifeFrac * 0.65;
+      }
+
+      if (p.userData.life <= 0) {
+        scene.remove(p);
+        if (p.material) {
+          p.material.dispose();
+        }
+        particles.splice(i, 1);
+      }
+    }
+  }
+
+  return function updateControlThrusters(inputs) {
+    if (!inputs) {
+      updateControlParticles();
+      return;
+    }
+
+    var pitchInput = clamp(
+      (typeof inputs.pitchDown === 'number' ? inputs.pitchDown : 0) -
+        (typeof inputs.pitchUp === 'number' ? inputs.pitchUp : 0),
+      -1,
+      1
+    );
+    var rollInput = clamp(
+      (typeof inputs.rollRight === 'number' ? inputs.rollRight : 0) -
+        (typeof inputs.rollLeft === 'number' ? inputs.rollLeft : 0),
+      -1,
+      1
+    );
+
+    var absPitch = Math.abs(pitchInput);
+    var absRoll = Math.abs(rollInput);
+
+    // Roll
+    if (absRoll > 0.01) {
+      if (rollInput < 0) {
+        // Roll left: left top (upward) + right bottom (downward)
+        localDir.set(0, 1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(leftTopPos, localDir, absRoll);
+
+        localDir.set(0, -1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(rightBottomPos, localDir, absRoll);
+      } else {
+        // Roll right: left bottom (downward) + right top (upward)
+        localDir.set(0, -1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(leftBottomPos, localDir, absRoll);
+
+        localDir.set(0, 1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(rightTopPos, localDir, absRoll);
+      }
+    }
+
+    // Pitch
+    if (absPitch > 0.01) {
+      if (pitchInput > 0) {
+        // Pitch down: top thrusters on both arms (upward flames)
+        localDir.set(0, 1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(leftTopPos, localDir, absPitch);
+        spawnThrusterParticle(rightTopPos, localDir, absPitch);
+      } else {
+        // Pitch up: bottom thrusters on both arms (downward flames)
+        localDir.set(0, -1, -0.15);
+        localDir.applyQuaternion(rocket.quaternion).normalize();
+        spawnThrusterParticle(leftBottomPos, localDir, absPitch);
+        spawnThrusterParticle(rightBottomPos, localDir, absPitch);
+      }
+    }
+
+    updateControlParticles();
+  };
+}

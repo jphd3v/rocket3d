@@ -122,6 +122,11 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
+function smoothstep(edge0, edge1, x) {
+  var t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function createCollisionResultSlot(maxCollisionPoints) {
   const collisionHits = [];
 
@@ -210,6 +215,8 @@ export function initPhysics(
   let collisionVelocityDampening = 0;
   let lastSameSurfaceFeedbackTime = Number.NEGATIVE_INFINITY;
   let lastCollisionSurfaceNormal = null;
+  let idleShakeTime = 0;
+  let idleShakeStrength = 0;
   let active = true;
   let invulnerable = false;
 
@@ -660,6 +667,29 @@ export function initPhysics(
     rocketVisual.position.copy(baseRocketVisualPosition);
     rocketVisual.rotation.copy(baseRocketVisualRotation);
 
+    // Engine vibration when rocket is still — layered sine waves for noise-like feel
+    if (idleShakeStrength > 0.001) {
+      var idleOffset = idleShakeStrength * 0.0035;
+      var idleAngle = idleShakeStrength * 0.000875;
+      rocketVisual.position.x +=
+        (Math.sin(idleShakeTime * 67) +
+          Math.sin(idleShakeTime * 113 + 0.5) * 0.6) *
+        idleOffset;
+      rocketVisual.position.y +=
+        (Math.sin(idleShakeTime * 79 + 1.3) +
+          Math.sin(idleShakeTime * 47 + 2.8) * 0.6) *
+        idleOffset *
+        0.6;
+      rocketVisual.rotation.x +=
+        (Math.sin(idleShakeTime * 55) +
+          Math.sin(idleShakeTime * 91 + 1.1) * 0.5) *
+        idleAngle;
+      rocketVisual.rotation.z +=
+        (Math.sin(idleShakeTime * 71 + 2.1) +
+          Math.sin(idleShakeTime * 103 + 0.8) * 0.5) *
+        idleAngle;
+    }
+
     if (
       shakeTimeRemainingMs <= 0 ||
       shakeDurationMs <= 0 ||
@@ -802,6 +832,8 @@ export function initPhysics(
     shakeTimeRemainingMs = 0;
     shakeDurationMs = 0;
     shakeStrength = 0;
+    idleShakeStrength = 0;
+    idleShakeTime = 0;
     hitStopTimeRemainingMs = 0;
     flashTimeRemainingMs = 0;
     flashDurationMs = 0;
@@ -1252,6 +1284,16 @@ export function initPhysics(
       );
     }
     rocket.rotation.setFromQuaternion(rocket.quaternion, rocket.rotation.order);
+
+    // Idle vibration — smooth ease based on speed, thrust, and maneuvering
+    var speedForShake = velocity.length();
+    var speedFactor = 1 - smoothstep(0.2, 4.0, speedForShake);
+    var thrustFactor = thrustInput > 0.01 ? 0.25 : 1.0;
+    var maneuverStrength = Math.abs(pitchInput) + Math.abs(rollInput);
+    var maneuverFactor = 1 - smoothstep(0, 1.0, maneuverStrength);
+    var targetIdleShake = speedFactor * thrustFactor * maneuverFactor;
+    idleShakeStrength = lerp(idleShakeStrength, targetIdleShake, 0.035);
+    idleShakeTime += invMaxFps;
 
     return getPhysicsState();
   }
