@@ -208,6 +208,8 @@ async function main() {
     var startupDirection = getStartupDirection(activeLevel);
     var levelSeedString = DEFAULT_LEVEL_SEED + ':' + activeLevel.seed;
     var levelSeedNumber = hashLevelSeed(levelSeedString);
+    scene.userData.levelLoadStartTime = performance.now();
+    scene.userData.levelLoadCompleteTime = null;
 
     // Create chunk manager with terrain generation
     const chunkManager = createChunkManagerWithTerrain(

@@ -1325,6 +1325,50 @@ function showToast(message, options = {}) {
   }, 3600);
 }
 
+function getPercent(loaded, total) {
+  if (!total || total <= 0) {
+    return 100;
+  }
+
+  return Math.floor((loaded / total) * 100);
+}
+
+function formatSeconds(ms) {
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function updateLevelLoadTime(scene, midLodSystem, farShellGroup) {
+  if (!scene || !scene.userData || !scene.userData.levelLoadStartTime) {
+    return;
+  }
+
+  var startTime = scene.userData.levelLoadStartTime;
+  var completeTime = scene.userData.levelLoadCompleteTime;
+  var midComplete =
+    !midLodSystem ||
+    !midLodSystem.totalChunks ||
+    midLodSystem.loadedChunks >= midLodSystem.totalChunks;
+  var farComplete =
+    !farShellGroup ||
+    !farShellGroup.userData ||
+    !farShellGroup.userData.totalShells ||
+    farShellGroup.userData.loadedShells >= farShellGroup.userData.totalShells;
+
+  if (!completeTime && midComplete && farComplete) {
+    completeTime = performance.now();
+    scene.userData.levelLoadCompleteTime = completeTime;
+  }
+
+  var timeEl = document.getElementById('hud-level-load-time');
+  if (!timeEl) {
+    return;
+  }
+
+  var displayTime = completeTime || performance.now();
+  timeEl.textContent = formatSeconds(displayTime - startTime);
+  timeEl.style.color = completeTime ? '#fff0a8' : '#7cdfff';
+}
+
 function updateUI(
   playerPosition,
   chunkManager,
@@ -1446,33 +1490,61 @@ function updateUI(
 
   // LOD loading status
   if (midLodSystem) {
-    let midPercent = Math.floor(
-      (midLodSystem.loadedChunks / midLodSystem.totalChunks) * 100
+    const midTotalPercent = getPercent(
+      midLodSystem.loadedChunks,
+      midLodSystem.totalChunks
     );
+    let midPercent = midTotalPercent;
     if (midLodSystem.priorityTotalChunks > 0) {
       midPercent = Math.floor(
         (midLodSystem.priorityChunks / midLodSystem.priorityTotalChunks) * 100
       );
     }
     const midEl = document.getElementById('hud-mid-lod');
-    midEl.textContent = midPercent + '%';
-    if (midPercent >= 100) {
+    if (midLodSystem.priorityTotalChunks > 0 && midTotalPercent < 100) {
+      midEl.textContent = 'P' + midPercent + '% T' + midTotalPercent + '%';
+    } else {
+      midEl.textContent = midTotalPercent + '%';
+    }
+    if (midTotalPercent >= 100) {
       midEl.style.color = '#fff0a8';
     } else {
       midEl.style.color = '#7cdfff';
     }
   }
 
+  var farShellGroup = null;
   if (scene) {
-    const farShellGroup = scene.getObjectByName('farShellSystem');
+    farShellGroup = scene.getObjectByName('farShellSystem');
     if (farShellGroup && farShellGroup.userData.totalShells > 0) {
-      const farPercent = Math.floor(
-        (farShellGroup.userData.loadedShells /
-          farShellGroup.userData.totalShells) *
-          100
+      const loadedShellCells = farShellGroup.userData.loadedShellCells || 0;
+      const totalShellCells = farShellGroup.userData.totalShellCells || 0;
+      const farPercent = getPercent(
+        totalShellCells > 0
+          ? loadedShellCells
+          : farShellGroup.userData.loadedShells,
+        totalShellCells > 0
+          ? totalShellCells
+          : farShellGroup.userData.totalShells
       );
+      const priorityTotal = farShellGroup.userData.priorityTotalShells || 0;
+      const priorityLoaded = farShellGroup.userData.priorityLoadedShells || 0;
+      const totalTiles = farShellGroup.userData.totalShellTiles || 0;
+      const loadedTiles = farShellGroup.userData.loadedShellTiles || 0;
       const farEl = document.getElementById('hud-far-shell');
-      farEl.textContent = farPercent + '%';
+      farEl.textContent =
+        farPercent +
+        '% (' +
+        farShellGroup.userData.loadedShells +
+        '/' +
+        farShellGroup.userData.totalShells +
+        (totalTiles > 0
+          ? ', ' + loadedTiles + '/' + totalTiles + ' tiles'
+          : '') +
+        (priorityTotal > 0
+          ? ', P' + priorityLoaded + '/' + priorityTotal
+          : '') +
+        ')';
       if (farPercent >= 100) {
         farEl.style.color = '#fff0a8';
       } else {
@@ -1480,6 +1552,8 @@ function updateUI(
       }
     }
   }
+
+  updateLevelLoadTime(scene, midLodSystem, farShellGroup);
 }
 
 function updateOptions(

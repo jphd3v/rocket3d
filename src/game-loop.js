@@ -79,6 +79,15 @@ function initGameLoop(
   let devMode = false;
   let debugLod0ChunksEnabled = true;
   var farShellDebugMode = 0;
+  var fullChunkDebugMaterial = new THREE.MeshBasicMaterial({
+    color: LOD_DEBUG_COLORS.FULL_CHUNKS,
+    vertexColors: false,
+    fog: false,
+    transparent: false,
+    depthTest: true,
+    depthWrite: true,
+    side: THREE.FrontSide,
+  });
   var lodOwnershipLogCounter = 0;
   var farShellState = {
     enabled: true,
@@ -1815,8 +1824,10 @@ function initGameLoop(
 
   function getShellDebugColor(meshName) {
     if (meshName.indexOf('midLodChunk_') === 0) return LOD_DEBUG_COLORS.LOD1;
-    if (meshName === 'farVisualShell_4') return LOD_DEBUG_COLORS.LOD2;
-    if (meshName === 'farVisualShell_8') return LOD_DEBUG_COLORS.LOD3;
+    if (meshName.indexOf('farVisualShell_4') === 0)
+      return LOD_DEBUG_COLORS.LOD2;
+    if (meshName.indexOf('farVisualShell_8') === 0)
+      return LOD_DEBUG_COLORS.LOD3;
     return 0xff00ff;
   }
 
@@ -1891,6 +1902,59 @@ function initGameLoop(
         child.material.visible = true;
       } else {
         child.material.wireframe = false;
+      }
+    }
+  }
+
+  function restoreFullChunkDebugMaterial(mesh) {
+    if (!mesh.userData.originalFullChunkMaterial) {
+      return;
+    }
+
+    mesh.material = mesh.userData.originalFullChunkMaterial;
+    mesh.userData.originalFullChunkMaterial = null;
+  }
+
+  function applyFullChunkDebugMaterial(mesh, mode) {
+    if (!mesh.isMesh || !mesh.material) {
+      return;
+    }
+
+    if (mode === 1) {
+      if (!mesh.userData.originalFullChunkMaterial) {
+        mesh.userData.originalFullChunkMaterial = mesh.material;
+      }
+      mesh.material = fullChunkDebugMaterial;
+      mesh.material.wireframe = false;
+      return;
+    }
+
+    restoreFullChunkDebugMaterial(mesh);
+
+    if (Array.isArray(mesh.material)) {
+      for (var i = 0; i < mesh.material.length; i++) {
+        mesh.material[i].wireframe = mode === 2;
+      }
+    } else {
+      mesh.material.wireframe = mode === 2;
+    }
+  }
+
+  function applyFullChunkDebugMode(mode) {
+    if (!chunkManager || !chunkManager.chunkMeshes) {
+      return;
+    }
+
+    if (mode !== 2 && chunkManager.materials) {
+      chunkManager.materials.opaque.wireframe = false;
+      chunkManager.materials.transparent.wireframe = false;
+    }
+
+    for (const [, mesh] of chunkManager.chunkMeshes) {
+      applyFullChunkDebugMaterial(mesh, mode);
+
+      for (var i = 0; i < mesh.children.length; i++) {
+        applyFullChunkDebugMaterial(mesh.children[i], mode);
       }
     }
   }
@@ -2249,6 +2313,7 @@ function initGameLoop(
       if (debugMidLodSystem && debugMidLodSystem.group) {
         applyFarShellDebugMode(debugMidLodSystem.group, farShellDebugMode);
       }
+      applyFullChunkDebugMode(farShellDebugMode);
 
       var modeLabels = [
         'Far Shell: Normal',
@@ -2683,6 +2748,9 @@ function initGameLoop(
       camera,
       physicsState && physicsState.velocity
     );
+    if (farShellDebugMode !== 0) {
+      applyFullChunkDebugMode(farShellDebugMode);
+    }
 
     // Update far shell opacity based on camera distance
     var farShellOpacityGroup = scene.getObjectByName('farShellSystem');

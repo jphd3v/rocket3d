@@ -28,6 +28,8 @@ Run `npm run format` and `npm run lint` after significant changes to maintain co
 - Avoid arrow functions unless explicitly requested or required by some special use case
 - Avoid complex and latest JavaScript features, cool tricks, and magic; try to always use simple functions and create simple and straightforward code
 
+Add a short section like this to AGENTS.md:
+
 ## Core Design Principles
 
 All coding implementation in this project must follow these fundamental principles:
@@ -48,6 +50,26 @@ Avoid implementing functionality until it's actually needed. Focus on what's req
 
 Don't optimize code before it's necessary. Optimization should only be performed when there's a proven performance bottleneck. Follow the principle: "Make it work, make it right, make it fast - in that order." Premature optimization can lead to complex, hard-to-maintain code without measurable benefits.
 
+## Performance Notes for Realtime 3D Code
+
+This is a browser-based Three.js game. Small inefficiencies inside per-frame loops can become visible as stutter, especially during chunk streaming, terrain remeshing, particles, and LOD updates.
+When changing performance-sensitive systems, follow these rules:
+
+- Avoid allocating objects inside per-frame loops. Reuse `THREE.Vector3`, arrays, temporary objects, and typed arrays where practical.
+- Do not call `.clone()` in hot paths such as particle updates, raycasts, physics, terrain checks, LOD visibility, or chunk streaming. Prefer `temp.copy(value)` or write into an `out` parameter.
+- Avoid creating or destroying Three.js objects during gameplay unless necessary. Prefer fixed pools for particles, projectiles, lights, temporary effects, and repeated visual elements.
+- Do not create new `Geometry`, `Material`, `Texture`, `CanvasTexture`, `Audio`, or DOM elements per frame.
+- If a system updates many objects, use one shared `BufferGeometry`, `InstancedMesh`, or pooled meshes where possible.
+- Throttle expensive visibility, sorting, scanning, and ownership logic. These usually do not need to run at 60 FPS.
+- Keep hard per-frame budgets for chunk mesh application, dirty remeshing, voxel edits, chunk unloads, and other terrain work.
+- Prioritize near/player-critical work over far visual work. Full nearby chunks and collision-critical remeshing must win over mid/far LOD generation.
+- Avoid sorting large lists every frame. Cache, throttle, or use partial selection when possible.
+- Avoid linear duplicate checks like `array.includes(key)` in frequently updated queues. Use a companion `Set` for membership.
+- Always dispose of Three.js resources when removing long-lived systems: `geometry.dispose()`, `material.dispose()`, `texture.dispose()`, and remove objects from the scene.
+- Visual effects must not modify gameplay state unless explicitly intended. Camera shake, idle motion, RCS flames, wind particles, and similar effects should usually be render-only.
+- Keep debug overlays, logs, wireframes, and visualization modes disabled by default in release builds.
+- After performance-sensitive changes, test by flying for several minutes while watching FPS and memory. Look for stutter, steady memory growth, and delayed chunk/LOD updates.
+
 ## Testing Policy
 
 This project intentionally does not include any tests, test frameworks, or test-related tooling. The development approach focuses on:
@@ -65,3 +87,5 @@ The absence of tests is a deliberate architectural decision to:
 - Focus development effort on the core 3D functionality
 
 All code should be written with clarity and simplicity as the primary goals, making it easily understandable without the need for test documentation.
+
+Add a short section like this to AGENTS.md:

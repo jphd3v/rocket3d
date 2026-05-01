@@ -324,6 +324,8 @@ var DEFAULT_SHELLS = [
   },
 ];
 
+var FAR_SHELL_TILE_CELLS = 64;
+
 function getLodBounds(generator, blockSize) {
   var bounds = generator.playfieldBounds;
   var maxY = bounds.maxY;
@@ -622,6 +624,12 @@ export function createFarShellSystemAsync(
   group.name = 'farShellSystem';
   group.userData.totalShells = shellConfigs.length;
   group.userData.loadedShells = 0;
+  group.userData.totalShellTiles = 0;
+  group.userData.loadedShellTiles = 0;
+  group.userData.totalShellCells = 0;
+  group.userData.loadedShellCells = 0;
+  group.userData.priorityTotalShells = 0;
+  group.userData.priorityLoadedShells = 0;
   var resolvePriorityShellsReady;
   group.userData.priorityShellsReady = new Promise(function (resolve) {
     resolvePriorityShellsReady = resolve;
@@ -630,6 +638,7 @@ export function createFarShellSystemAsync(
     priorityShellCount,
     shellConfigs.length
   );
+  group.userData.priorityTotalShells = expectedPriorityShells;
   var priorityShellsSettled = 0;
 
   if (expectedPriorityShells === 0) {
@@ -683,82 +692,116 @@ export function createFarShellSystemAsync(
     var samples = getCoarseCellSampleOffsets(options.blockSize);
     var threshold = getCoarseSolidThreshold(options.blockSize);
 
-    var lodKey = 'farShell_' + options.blockSize;
-    var geoOptions = {
-      levelName: lodKey,
-      blockSize: options.blockSize,
-      regionMinX: startX,
-      regionMinY: startY,
-      regionMinZ: startZ,
-      cellsX: gridW,
-      cellsY: gridH,
-      cellsZ: gridD,
-      threshold: threshold,
-      samples: samples,
-    };
+    var shellCenterX = startX + (gridW * options.blockSize) / 2;
+    var shellCenterY = startY + (gridH * options.blockSize) / 2;
+    var shellCenterZ = startZ + (gridD * options.blockSize) / 2;
+    var shellCenter = new THREE.Vector3(
+      shellCenterX,
+      shellCenterY,
+      shellCenterZ
+    );
+    var tileCells = options.blockSize <= 4 ? FAR_SHELL_TILE_CELLS : 48;
+    var shellTileCount = 0;
+    var shellSettledTiles = 0;
 
-    workerInterface
-      .generateLodGeometry(lodKey, terrainWorkerConfig, geoOptions, {
-        priority: isPriorityShell,
-      })
-      .then(function (result) {
-        var shellCenterX = startX + (gridW * options.blockSize) / 2;
-        var shellCenterY = startY + (gridH * options.blockSize) / 2;
-        var shellCenterZ = startZ + (gridD * options.blockSize) / 2;
+    for (var tileZ = 0; tileZ < gridD; tileZ += tileCells) {
+      for (var tileX = 0; tileX < gridW; tileX += tileCells) {
+        shellTileCount++;
+      }
+    }
 
-        var mesh = createMeshFromLodData(
-          result,
-          options.blockSize,
-          startX,
-          startY,
-          startZ,
-          {
-            transparent: true,
-            depthWrite: true,
-            side: THREE.FrontSide,
-            opacity: options.maxOpacity,
-            name: 'farVisualShell_' + options.blockSize,
-            userData: {
-              fadeNear: options.fadeNear,
-              fadeFar: options.fadeFar,
-              fadeOutNear: options.fadeOutNear,
-              fadeOutFar: options.fadeOutFar,
-              maxOpacity: options.maxOpacity,
-            },
-            distanceFade: true,
-            shellCenter: new THREE.Vector3(
-              shellCenterX,
-              shellCenterY,
-              shellCenterZ
-            ),
-          }
-        );
+    group.userData.totalShellTiles += shellTileCount;
+    group.userData.totalShellCells += gridW * gridH * gridD;
 
-        if (mesh) {
-          group.add(mesh);
-          group.userData.loadedShells++;
-          debugLog('[LODAsync] Added ' + lodKey);
-        } else {
-          // If no mesh was generated (empty), it's still "processed"
-          group.userData.loadedShells++;
+    function settleTile(cellCount) {
+      group.userData.loadedShellTiles++;
+      group.userData.loadedShellCells += cellCount;
+      shellSettledTiles++;
+      if (shellSettledTiles < shellTileCount) {
+        return;
+      }
+
+      group.userData.loadedShells++;
+      if (isPriorityShell) {
+        priorityShellsSettled++;
+        group.userData.priorityLoadedShells = priorityShellsSettled;
+        if (priorityShellsSettled >= expectedPriorityShells) {
+          resolvePriorityShellsReady();
         }
-        if (isPriorityShell) {
-          priorityShellsSettled++;
-          if (priorityShellsSettled >= expectedPriorityShells) {
-            resolvePriorityShellsReady();
-          }
-        }
-      })
-      .catch(function (err) {
-        group.userData.loadedShells++;
-        if (isPriorityShell) {
-          priorityShellsSettled++;
-          if (priorityShellsSettled >= expectedPriorityShells) {
-            resolvePriorityShellsReady();
-          }
-        }
-        debugError('[LODAsync] Failed to build ' + lodKey, err);
-      });
+      }
+    }
+
+    for (var cellZ = 0; cellZ < gridD; cellZ += tileCells) {
+      for (var cellX = 0; cellX < gridW; cellX += tileCells) {
+        var tileGridW = Math.min(tileCells, gridW - cellX);
+        var tileGridD = Math.min(tileCells, gridD - cellZ);
+        var tileStartX = startX + cellX * options.blockSize;
+        var tileStartZ = startZ + cellZ * options.blockSize;
+        var tileCellCount = tileGridW * gridH * tileGridD;
+        var lodKey =
+          'farShell_' + options.blockSize + '_' + cellX + '_' + cellZ;
+        var geoOptions = {
+          levelName: lodKey,
+          blockSize: options.blockSize,
+          regionMinX: tileStartX,
+          regionMinY: startY,
+          regionMinZ: tileStartZ,
+          cellsX: tileGridW,
+          cellsY: gridH,
+          cellsZ: tileGridD,
+          threshold: threshold,
+          samples: samples,
+        };
+
+        workerInterface
+          .generateLodGeometry(lodKey, terrainWorkerConfig, geoOptions, {
+            priority: isPriorityShell,
+          })
+          .then(
+            (function (tileOriginX, tileOriginZ, tileCellsCount, tileKey) {
+              return function (result) {
+                var mesh = createMeshFromLodData(
+                  result,
+                  options.blockSize,
+                  tileOriginX,
+                  startY,
+                  tileOriginZ,
+                  {
+                    transparent: true,
+                    depthWrite: true,
+                    side: THREE.FrontSide,
+                    opacity: options.maxOpacity,
+                    name: 'farVisualShell_' + options.blockSize + '_tile',
+                    userData: {
+                      fadeNear: options.fadeNear,
+                      fadeFar: options.fadeFar,
+                      fadeOutNear: options.fadeOutNear,
+                      fadeOutFar: options.fadeOutFar,
+                      maxOpacity: options.maxOpacity,
+                    },
+                    distanceFade: true,
+                    shellCenter: shellCenter,
+                  }
+                );
+
+                if (mesh) {
+                  group.add(mesh);
+                  debugLog('[LODAsync] Added ' + tileKey);
+                }
+                settleTile(tileCellsCount);
+              };
+            })(tileStartX, tileStartZ, tileCellCount, lodKey)
+          )
+          .catch(
+            (function (tileCellsCount, tileKey) {
+              return function (err) {
+                settleTile(tileCellsCount);
+                debugError('[LODAsync] Failed to build ' + tileKey, err);
+              };
+            })(tileCellCount, lodKey)
+          );
+      }
+    }
   });
 
   return group;
@@ -838,11 +881,23 @@ function hasFullDetailCoverage(chunkManager, key) {
   var state = chunkManager.chunkStates
     ? chunkManager.chunkStates.get(key)
     : null;
-  return (
-    chunkManager.chunkMeshes.has(key) ||
-    state === 'loaded' ||
-    state === 'meshed'
-  );
+  if (chunkManager.chunkMeshes.has(key) || state === 'meshed') {
+    return true;
+  }
+
+  if (state !== 'loaded') {
+    return false;
+  }
+
+  if (
+    chunkManager.pendingChunkMeshKeys &&
+    chunkManager.pendingChunkMeshKeys.has(key)
+  ) {
+    return false;
+  }
+
+  // A loaded chunk with no pending mesh is either empty or already resolved.
+  return true;
 }
 
 function isFullChunkBoundary(chunkManager, coords) {
