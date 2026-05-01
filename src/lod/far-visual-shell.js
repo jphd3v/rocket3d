@@ -19,6 +19,7 @@ export function applyLodDistanceFade(material) {
 
   var useAlphaHashFade = material.userData.alphaHashFade === true;
   var useFadeCenter = material.userData.useFadeCenter === true;
+  var useColorTuning = material.userData.lodColorTuning === true;
 
   material.userData.lodDistanceFade = true;
   material.transparent = !useAlphaHashFade;
@@ -38,6 +39,24 @@ export function applyLodDistanceFade(material) {
     shader.uniforms.lodFadeCenter = {
       value: material.userData.fadeCenter || new THREE.Vector3(),
     };
+    shader.uniforms.lodFogStrength = {
+      value:
+        typeof material.userData.fogStrength === 'number'
+          ? material.userData.fogStrength
+          : 1,
+    };
+    shader.uniforms.lodColorContrast = {
+      value:
+        typeof material.userData.colorContrast === 'number'
+          ? material.userData.colorContrast
+          : 1,
+    };
+    shader.uniforms.lodColorMultiplier = {
+      value:
+        typeof material.userData.colorMultiplier === 'number'
+          ? material.userData.colorMultiplier
+          : 1,
+    };
     material.userData.lodShader = shader;
 
     shader.vertexShader = shader.vertexShader.replace(
@@ -51,8 +70,20 @@ export function applyLodDistanceFade(material) {
     var distanceSource = useFadeCenter ? 'lodFadeCenter' : 'cameraPosition';
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
-      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nuniform vec3 lodFadeCenter;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
+      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nuniform float lodFogStrength;\nuniform float lodColorContrast;\nuniform float lodColorMultiplier;\nuniform vec3 lodFadeCenter;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
     );
+
+    if (useColorTuning) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        '#include <color_fragment>\ndiffuseColor.rgb = clamp((diffuseColor.rgb - 0.5) * lodColorContrast + 0.5, 0.0, 1.0) * lodColorMultiplier;'
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <fog_fragment>',
+        '#ifdef USE_FOG\n  #ifdef FOG_EXP2\n    float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);\n  #else\n    float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);\n  #endif\n  fogFactor *= lodFogStrength;\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);\n#endif'
+      );
+    }
+
     var fadeShader =
       'float lodDistance = distance(' +
       distanceSource +
@@ -172,6 +203,24 @@ function createMeshFromLodData(
   return mesh;
 }
 
+function getFarShellVisualTuning(blockSize, maxOpacity) {
+  if (blockSize <= 4) {
+    return {
+      maxOpacity: Math.max(maxOpacity, 0.94),
+      colorContrast: 1.12,
+      colorMultiplier: 0.92,
+      fogStrength: 0.78,
+    };
+  }
+
+  return {
+    maxOpacity: Math.max(maxOpacity, 0.78),
+    colorContrast: 1.06,
+    colorMultiplier: 0.95,
+    fogStrength: 0.9,
+  };
+}
+
 function buildFarVisualShell(generator, options) {
   var blockSize =
     options && typeof options.blockSize === 'number' ? options.blockSize : 8;
@@ -191,6 +240,8 @@ function buildFarVisualShell(generator, options) {
     options && typeof options.maxOpacity === 'number'
       ? options.maxOpacity
       : 0.72;
+  var visualTuning = getFarShellVisualTuning(blockSize, maxOpacity);
+  maxOpacity = visualTuning.maxOpacity;
 
   var bounds = generator.playfieldBounds;
 
@@ -271,6 +322,10 @@ function buildFarVisualShell(generator, options) {
       fadeOutNear: fadeOutNear,
       fadeOutFar: fadeOutFar,
       maxOpacity: maxOpacity,
+      lodColorTuning: true,
+      colorContrast: visualTuning.colorContrast,
+      colorMultiplier: visualTuning.colorMultiplier,
+      fogStrength: visualTuning.fogStrength,
     },
     distanceFade: true,
     shellCenter: new THREE.Vector3(shellCenterX, shellCenterY, shellCenterZ),
@@ -557,6 +612,11 @@ export function createFarShellSystem(
       maxOpacity: config.maxOpacity,
       minDistance: config.minDistance != null ? config.minDistance : minDist,
     };
+    var visualTuning = getFarShellVisualTuning(
+      options.blockSize,
+      options.maxOpacity
+    );
+    options.maxOpacity = visualTuning.maxOpacity;
 
     if (config.displacementAmount != null) {
       options.displacementAmount = config.displacementAmount;
@@ -660,6 +720,11 @@ export function createFarShellSystemAsync(
       maxOpacity: config.maxOpacity,
       minDistance: config.minDistance != null ? config.minDistance : minDist,
     };
+    var visualTuning = getFarShellVisualTuning(
+      options.blockSize,
+      options.maxOpacity
+    );
+    options.maxOpacity = visualTuning.maxOpacity;
 
     var bounds = generator.playfieldBounds;
     var maxY = bounds.maxY;
@@ -778,6 +843,10 @@ export function createFarShellSystemAsync(
                       fadeOutNear: options.fadeOutNear,
                       fadeOutFar: options.fadeOutFar,
                       maxOpacity: options.maxOpacity,
+                      lodColorTuning: true,
+                      colorContrast: visualTuning.colorContrast,
+                      colorMultiplier: visualTuning.colorMultiplier,
+                      fogStrength: visualTuning.fogStrength,
                     },
                     distanceFade: true,
                     shellCenter: shellCenter,
