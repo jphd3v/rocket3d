@@ -49,12 +49,14 @@ like bugs when they pop up near the player.
 - **Arrow keys**: pitch and roll
 - **Space**: thrust
 - **X**: fire current weapon
+- **C**: cycle weapons
+- **Y**: toggle crosshair
 - **Z**: cycle camera perspective
 - **W/A/S/D**: adjust camera height/orbit
 - **P**: pause
+- **R**: reset camera
 - **F**: fullscreen
 - **H**: toggle HUD
-- **C**: toggle crosshair
 - **M**: cycle music (**Shift+M**: cycle reverse)
 - **N**: toggle sound effects
 - **I**: toggle AI

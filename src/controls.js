@@ -185,8 +185,12 @@ function keydown(heldInputs, oneShotInputs, event) {
       oneShotInputs.toggleHud = 1;
       break;
 
-    case 'KeyC':
+    case 'KeyY':
       oneShotInputs.toggleCrosshair = 1;
+      break;
+
+    case 'KeyC':
+      oneShotInputs.cycleWeapon = 1;
       break;
 
     case 'KeyT':
@@ -195,6 +199,10 @@ function keydown(heldInputs, oneShotInputs, event) {
 
     case 'KeyP':
       oneShotInputs.forceOptions = 1;
+      break;
+
+    case 'KeyR':
+      oneShotInputs.cameraReset = 1;
       break;
 
     case 'Digit0':
