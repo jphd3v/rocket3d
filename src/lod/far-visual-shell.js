@@ -19,11 +19,11 @@ export function applyLodDistanceFade(material) {
 
   var useAlphaHashFade = material.userData.alphaHashFade === true;
   var useFadeCenter = material.userData.useFadeCenter === true;
-  var useColorTuning = material.userData.lodColorTuning === true;
+  var useFogTuning = typeof material.userData.fogStrength === 'number';
 
   material.userData.lodDistanceFade = true;
   material.transparent = !useAlphaHashFade;
-  material.depthWrite = useAlphaHashFade;
+  material.depthWrite = useAlphaHashFade || material.depthWrite === true;
   material.alphaHash = false;
   material.needsUpdate = true;
 
@@ -45,18 +45,6 @@ export function applyLodDistanceFade(material) {
           ? material.userData.fogStrength
           : 1,
     };
-    shader.uniforms.lodColorContrast = {
-      value:
-        typeof material.userData.colorContrast === 'number'
-          ? material.userData.colorContrast
-          : 1,
-    };
-    shader.uniforms.lodColorMultiplier = {
-      value:
-        typeof material.userData.colorMultiplier === 'number'
-          ? material.userData.colorMultiplier
-          : 1,
-    };
     material.userData.lodShader = shader;
 
     shader.vertexShader = shader.vertexShader.replace(
@@ -70,14 +58,10 @@ export function applyLodDistanceFade(material) {
     var distanceSource = useFadeCenter ? 'lodFadeCenter' : 'cameraPosition';
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
-      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nuniform float lodFogStrength;\nuniform float lodColorContrast;\nuniform float lodColorMultiplier;\nuniform vec3 lodFadeCenter;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
+      '#include <common>\nuniform float lodFadeNear;\nuniform float lodFadeFar;\nuniform float lodFadeOutNear;\nuniform float lodFadeOutFar;\nuniform float lodFogStrength;\nuniform vec3 lodFadeCenter;\nvarying vec3 vLodWorldPosition;\nfloat lodSmoothFade(float edge0, float edge1, float value) {\n  if (edge1 <= edge0) return value >= edge1 ? 1.0 : 0.0;\n  float t = clamp((value - edge0) / (edge1 - edge0), 0.0, 1.0);\n  return t * t * (3.0 - 2.0 * t);\n}'
     );
 
-    if (useColorTuning) {
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <color_fragment>',
-        '#include <color_fragment>\ndiffuseColor.rgb = clamp((diffuseColor.rgb - 0.5) * lodColorContrast + 0.5, 0.0, 1.0) * lodColorMultiplier;'
-      );
+    if (useFogTuning) {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <fog_fragment>',
         '#ifdef USE_FOG\n  #ifdef FOG_EXP2\n    float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);\n  #else\n    float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);\n  #endif\n  fogFactor *= lodFogStrength;\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);\n#endif'
@@ -103,6 +87,10 @@ export function applyLodDistanceFade(material) {
   };
 }
 
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
 export function updateLodFadeCenter(root, center) {
   if (!root || !center) {
     return;
@@ -124,6 +112,17 @@ export function updateLodFadeCenter(root, center) {
   });
 }
 
+function applyLodColorTuning(colors, colorContrast, colorMultiplier) {
+  if (colorContrast === 1 && colorMultiplier === 1) {
+    return;
+  }
+
+  for (var i = 0; i < colors.length; i++) {
+    colors[i] = clamp01((colors[i] - 0.5) * colorContrast + 0.5);
+    colors[i] *= colorMultiplier;
+  }
+}
+
 function createMeshFromLodData(
   result,
   blockSize,
@@ -134,6 +133,14 @@ function createMeshFromLodData(
 ) {
   if (result.faceCount === 0) {
     return null;
+  }
+
+  if (materialOptions.colorTuning) {
+    applyLodColorTuning(
+      result.colors,
+      materialOptions.colorTuning.colorContrast,
+      materialOptions.colorTuning.colorMultiplier
+    );
   }
 
   var geometry = new THREE.BufferGeometry();
@@ -158,10 +165,10 @@ function createMeshFromLodData(
       materialOptions.color !== undefined ? materialOptions.color : 0xffffff,
     transparent: materialOptions.transparent || false,
     depthWrite:
-      materialOptions.transparent === true
-        ? false
-        : materialOptions.depthWrite !== undefined
-          ? materialOptions.depthWrite
+      materialOptions.depthWrite !== undefined
+        ? materialOptions.depthWrite
+        : materialOptions.transparent === true
+          ? false
           : true,
     side: materialOptions.side || THREE.FrontSide,
     opacity:
@@ -316,15 +323,16 @@ function buildFarVisualShell(generator, options) {
     side: THREE.FrontSide,
     opacity: maxOpacity,
     name: 'farVisualShell_' + blockSize,
+    colorTuning: {
+      colorContrast: visualTuning.colorContrast,
+      colorMultiplier: visualTuning.colorMultiplier,
+    },
     userData: {
       fadeNear: fadeNear,
       fadeFar: fadeFar,
       fadeOutNear: fadeOutNear,
       fadeOutFar: fadeOutFar,
       maxOpacity: maxOpacity,
-      lodColorTuning: true,
-      colorContrast: visualTuning.colorContrast,
-      colorMultiplier: visualTuning.colorMultiplier,
       fogStrength: visualTuning.fogStrength,
     },
     distanceFade: true,
@@ -837,15 +845,16 @@ export function createFarShellSystemAsync(
                     side: THREE.FrontSide,
                     opacity: options.maxOpacity,
                     name: 'farVisualShell_' + options.blockSize + '_tile',
+                    colorTuning: {
+                      colorContrast: visualTuning.colorContrast,
+                      colorMultiplier: visualTuning.colorMultiplier,
+                    },
                     userData: {
                       fadeNear: options.fadeNear,
                       fadeFar: options.fadeFar,
                       fadeOutNear: options.fadeOutNear,
                       fadeOutFar: options.fadeOutFar,
                       maxOpacity: options.maxOpacity,
-                      lodColorTuning: true,
-                      colorContrast: visualTuning.colorContrast,
-                      colorMultiplier: visualTuning.colorMultiplier,
                       fogStrength: visualTuning.fogStrength,
                     },
                     distanceFade: true,
