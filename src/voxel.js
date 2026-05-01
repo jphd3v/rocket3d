@@ -804,25 +804,22 @@ export function generateGeometryDataForChunk(world, chunkX, chunkY, chunkZ) {
 
       for (x[v] = 0; x[v] < chunkSize; x[v]++) {
         for (x[u] = 0; x[u] < chunkSize; x[u]++) {
-          let a = 0;
-          let b = 0;
+          let a = getVoxelForMeshing(
+            startX + x[0],
+            startY + x[1],
+            startZ + x[2]
+          );
+          let b = getVoxelForMeshing(
+            startX + x[0] + q[0],
+            startY + x[1] + q[1],
+            startZ + x[2] + q[2]
+          );
 
-          if (x[d] >= 0) {
-            a = getVoxelForMeshing(startX + x[0], startY + x[1], startZ + x[2]);
-            if (isCrystalVoxelType(a)) {
-              a = 0;
-            }
+          if (isCrystalVoxelType(a)) {
+            a = 0;
           }
-
-          if (x[d] < chunkSize - 1) {
-            b = getVoxelForMeshing(
-              startX + x[0] + q[0],
-              startY + x[1] + q[1],
-              startZ + x[2] + q[2]
-            );
-            if (isCrystalVoxelType(b)) {
-              b = 0;
-            }
+          if (isCrystalVoxelType(b)) {
+            b = 0;
           }
 
           if (isVoxelRenderable(a) && !isVoxelRenderable(b)) {
