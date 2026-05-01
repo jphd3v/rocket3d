@@ -30,7 +30,7 @@ const MISSILE_LIFETIME_MS = 2500;
 const MISSILE_TURN_RATE = 0.75;
 const MISSILE_DAMAGE = 35;
 const MISSILE_EXPLOSION_RADIUS = 5;
-const MISSILE_EXPLOSION_REACH = 8;
+const MISSILE_EXPLOSION_REACH = 10;
 const MISSILE_PLAYER_BLAST_RADIUS = 22;
 const MISSILE_PLAYER_BLAST_DAMAGE = scaleWeaponDamage(42);
 const MISSILE_PLAYER_BLAST_FORCE = 2.8;
@@ -118,6 +118,9 @@ const FLAMETHROWER_IMPACT_SOUND_INTERVAL_MS = 90;
 const FLAMETHROWER_PROP_HIT_RADIUS = 2.4;
 const FLAMETHROWER_PROP_HIT_INTERVAL_MS = 75;
 const FLAMETHROWER_RAYCAST_STRIDE = 3;
+const FLAMETHROWER_HEAT_PER_HIT = 0.33;
+const FLAMETHROWER_HEAT_THRESHOLD = 1.0;
+const FLAMETHROWER_HEAT_DECAY_RATE = 0.35;
 const IMPACT_FLAME_PARTICLE_COUNT = 3;
 const IMPACT_SMOKE_PARTICLE_COUNT = 2;
 const MISSILE_EXPLOSION_FLAME_PARTICLE_COUNT = 14;
@@ -146,8 +149,8 @@ const WEAPONS = [
     spread: 0.075,
     speed: 5,
     targetDamage: scaleWeaponDamage(4),
-    targetImpactStrength: 0.22,
-    targetImpulse: 0.14,
+    targetImpactStrength: 0.45,
+    targetImpulse: 0.35,
   },
   {
     id: 'missile',
@@ -290,20 +293,47 @@ function destroyVoxelCluster(
   centerY,
   centerZ,
   reach = DESTRUCTION_REACH,
-  shape = 'diamond'
+  shape = 'diamond',
+  edgeJitter = 0
 ) {
   let destroyedCount = 0;
   const maxDistanceSq = reach * reach;
+  var outerReach = reach;
 
-  for (let y = centerY - reach; y <= centerY + reach; y++) {
-    for (let z = centerZ - reach; z <= centerZ + reach; z++) {
-      for (let x = centerX - reach; x <= centerX + reach; x++) {
+  if (edgeJitter > 0) {
+    outerReach = Math.ceil(reach * (1 + 0.35 * edgeJitter));
+  }
+  const outerReachSq = outerReach * outerReach;
+  const innerReachSq = edgeJitter > 0 ? (reach * 0.65) * (reach * 0.65) : 0;
+  var jitteredRadiusSq;
+
+  for (let y = centerY - outerReach; y <= centerY + outerReach; y++) {
+    for (let z = centerZ - outerReach; z <= centerZ + outerReach; z++) {
+      for (let x = centerX - outerReach; x <= centerX + outerReach; x++) {
         const dx = x - centerX;
         const dy = y - centerY;
         const dz = z - centerZ;
+        const distSq = dx * dx + dy * dy + dz * dz;
 
         if (shape === 'sphere') {
-          if (dx * dx + dy * dy + dz * dz > maxDistanceSq) {
+          if (distSq > outerReachSq) {
+            continue;
+          }
+
+          if (edgeJitter > 0) {
+            if (distSq <= innerReachSq) {
+              // inner core: always destroy
+            } else {
+              // randomize effective radius per voxel for chaotic edge
+              jitteredRadiusSq =
+                reach * reach *
+                (0.65 + Math.random() * 0.7 * edgeJitter) *
+                (0.65 + Math.random() * 0.7 * edgeJitter);
+              if (distSq > jitteredRadiusSq) {
+                continue;
+              }
+            }
+          } else if (distSq > maxDistanceSq) {
             continue;
           }
         } else if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > reach) {
@@ -389,6 +419,7 @@ export function initWeaponSystem(
   const dustParticles = [];
   const flameJets = [];
   const flameSmoke = [];
+  const voxelHeatMap = new Map();
   const bulletPool = [];
   const missilePool = [];
   const dustParticlePool = [];
@@ -1220,7 +1251,8 @@ export function initWeaponSystem(
         hit.voxelY,
         hit.voxelZ,
         explosionReach,
-        'sphere'
+        'sphere',
+        0.7
       );
       addDust(hitPosition, hit.normal);
 
@@ -1489,7 +1521,54 @@ export function initWeaponSystem(
     }
   }
 
-  function updateFlamethrowerParticles(currentTime) {
+  var flamethrowerMuzzleRaycastCooldown = 0;
+
+  function updateFlamethrowerParticles(currentTime, dt, isFiring) {
+    if (isFiring && flamethrowerMuzzleRaycastCooldown <= 0) {
+      flamethrowerMuzzleRaycastCooldown = 2;
+
+      getRocketForwardVector(rocket, forward);
+      getMuzzlePosition(muzzlePosition);
+      nextBulletPosition.copy(muzzlePosition).addScaledVector(forward, 4);
+
+      var muzzleHit = raycastVoxelSegment(
+        world,
+        muzzlePosition,
+        nextBulletPosition,
+        0.05
+      );
+
+      if (muzzleHit) {
+        for (var my = -1; my <= 1; my++) {
+          for (var mz = -1; mz <= 1; mz++) {
+            for (var mx = -1; mx <= 1; mx++) {
+              var mvx = muzzleHit.voxelX + mx;
+              var mvy = muzzleHit.voxelY + my;
+              var mvz = muzzleHit.voxelZ + mz;
+              var mvoxelType = getVoxel(world, mvx, mvy, mvz);
+
+              if (!isVoxelDestructible(mvoxelType)) {
+                continue;
+              }
+
+              var mheatKey = mvx + ',' + mvy + ',' + mvz;
+              var mcurrentHeat = voxelHeatMap.get(mheatKey) || 0;
+              mcurrentHeat += FLAMETHROWER_HEAT_PER_HIT;
+
+              if (mcurrentHeat >= FLAMETHROWER_HEAT_THRESHOLD) {
+                destroyVoxelCluster(world, mvx, mvy, mvz, 0);
+                voxelHeatMap.delete(mheatKey);
+              } else {
+                voxelHeatMap.set(mheatKey, mcurrentHeat);
+              }
+            }
+          }
+        }
+      }
+    } else if (flamethrowerMuzzleRaycastCooldown > 0) {
+      flamethrowerMuzzleRaycastCooldown--;
+    }
+
     for (let i = flameJets.length - 1; i >= 0; i--) {
       const flame = flameJets[i];
       nextBulletPosition.copy(flame.position).add(flame.userData.velocity);
@@ -1543,7 +1622,34 @@ export function initWeaponSystem(
             hit.voxelZ,
             hitPosition
           );
-          destroyVoxelCluster(world, hit.voxelX, hit.voxelY, hit.voxelZ, 0);
+
+          var heatRadius = 1;
+
+          for (var dy = -heatRadius; dy <= heatRadius; dy++) {
+            for (var dz = -heatRadius; dz <= heatRadius; dz++) {
+              for (var dx = -heatRadius; dx <= heatRadius; dx++) {
+                var hx = hit.voxelX + dx;
+                var hy = hit.voxelY + dy;
+                var hz = hit.voxelZ + dz;
+                var voxelType = getVoxel(world, hx, hy, hz);
+
+                if (!isVoxelDestructible(voxelType)) {
+                  continue;
+                }
+
+                var heatKey = hx + ',' + hy + ',' + hz;
+                var currentHeat = voxelHeatMap.get(heatKey) || 0;
+                currentHeat += FLAMETHROWER_HEAT_PER_HIT;
+
+                if (currentHeat >= FLAMETHROWER_HEAT_THRESHOLD) {
+                  destroyVoxelCluster(world, hx, hy, hz, 0);
+                  voxelHeatMap.delete(heatKey);
+                } else {
+                  voxelHeatMap.set(heatKey, currentHeat);
+                }
+              }
+            }
+          }
 
           if (typeof world.destroyDetailPropsNearPoint === 'function') {
             world.destroyDetailPropsNearPoint(
@@ -1586,6 +1692,18 @@ export function initWeaponSystem(
       }
 
       removeFlameJet(i);
+    }
+
+    if (voxelHeatMap.size > 0 && dt > 0) {
+      var decayAmount = FLAMETHROWER_HEAT_DECAY_RATE * dt;
+      voxelHeatMap.forEach(function (heat, key) {
+        heat -= decayAmount;
+        if (heat <= 0) {
+          voxelHeatMap.delete(key);
+        } else {
+          voxelHeatMap.set(key, heat);
+        }
+      });
     }
   }
 
@@ -1651,7 +1769,7 @@ export function initWeaponSystem(
 
     updateBullets();
     updateMissiles(dt);
-    updateFlamethrowerParticles(currentTime);
+    updateFlamethrowerParticles(currentTime, dt, flamethrowerActive);
     updateFlamethrowerSmoke();
     updateDust();
     updateRecoil();
