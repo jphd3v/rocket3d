@@ -37,6 +37,7 @@ import {
   createMidLodSystemAsync,
 } from './lod/far-visual-shell.js';
 import { DEBUG, debugLog, debugWarn, debugError } from './debug.js';
+import { clearTerrainCacheFromUrl } from './terrain-cache.js';
 
 var DEFAULT_LEVEL_SEED = 'rocket3d-dev-seed-01';
 
@@ -141,6 +142,8 @@ function getStartupDirection(activeLevel) {
 
 async function main() {
   try {
+    await clearTerrainCacheFromUrl();
+
     // Initialize loading manager
     const loadingManager = new LoadingManager();
     const soundtrack = createSoundtrackController({
@@ -236,6 +239,9 @@ async function main() {
         },
         onChunkEmpty: function () {
           loadingManager.chunkEmpty();
+        },
+        onTerrainCacheLookup: function (persistentHit) {
+          loadingManager.terrainCacheLookup(persistentHit);
         },
       }
     );

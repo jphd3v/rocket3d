@@ -1,9 +1,10 @@
 # Rocket3D
 
-Rocket3D is a fast arcade voxel flight game for the web. It is inspired by the
-1996 MS-DOS game `Wings` and its predecessor, `AUTS` (1995), but rebuilt as a fully 3D WebGL game: pixel becomes
-voxel, and the player flies a small rocket through cave systems, chambers, and
-destructible underground spaces.
+Rocket3D is a fast arcade voxel flight game for the web, inspired by the feel
+of 1990s cave-flying games like `Wings` (1996) and `AUTS` (1995). It is an
+original open-source implementation rebuilt as a fully 3D WebGL game: pixel
+becomes voxel, and the player flies a small rocket through cave systems,
+chambers, and destructible underground spaces.
 
 The current version is an early engine-focused release. The goal is to make the
 core voxel world feel worth flying through before adding progression, scoring,
@@ -65,9 +66,9 @@ like bugs when they pop up near the player.
 
 - **T**: toggle dev statistics overlay
 - **B**: toggle chunk boundaries
-- **L**: toggle all LOD levels
 - **0 / 1 / 2 / 3**: toggle individual LOD levels
-- **O**: toggle LOD debug colors
+- **L**: cycle LOD debug mode: normal, identity colors, wireframe, disabled
+- **O**: show LOD shell statistics
 
 Gamepad support is experimental. It has only been tested with one controller in
 Firefox, where the browser exposes raw input mappings; Chrome or other
@@ -92,9 +93,18 @@ npm run preview
 The project uses Three.js, Vite, JavaScript modules, Web Workers, and procedural
 voxel terrain generation.
 
-## Inspiration
+## Browser Terrain Cache
 
-Rocket3D is an original open-source game inspired by the feel of 1990s cave-flying arcade games, especially `Wings` (1996) and `AUTS` (1995). It is a fresh implementation from scratch and does not use original game code or assets from those titles.
+Rocket3D keeps a browser-local terrain cache for generated chunk and LOD mesh
+data, so repeat visits can reuse deterministic terrain instead of rebuilding
+everything from scratch. The cache is treated as an optimization, not as a
+gameplay dependency: startup may load from it, but normal flight-time chunk
+streaming still prioritizes fresh worker generation so nearby full-detail
+terrain, collision, and destruction stay responsive.
+
+If the cache is missing, stale, cleared, or unavailable, the game falls back to
+normal terrain generation. To clear the terrain cache for the current browser
+origin, start the game with `?clearTerrainCache=1`.
 
 ## License and copyright
 

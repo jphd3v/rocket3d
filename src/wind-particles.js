@@ -111,9 +111,7 @@ function initWindParticles(scene) {
     p.position.copy(camPos).addScaledVector(spawnDir, spawnDist);
 
     windField.getWindAt(p.position, windResult);
-    p.velocity
-      .copy(windResult.direction)
-      .multiplyScalar(windResult.strength);
+    p.velocity.copy(windResult.direction).multiplyScalar(windResult.strength);
 
     // Small random variation per particle
     p.velocity.x += (Math.random() - 0.5) * windResult.strength * 0.12;

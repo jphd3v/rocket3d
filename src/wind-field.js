@@ -137,7 +137,10 @@ function initWindField(activeLevel) {
           strength += (zone.strength - strength) * influence;
         } else if (zone.type === 'tunnel' && zone.direction) {
           blendDir.copy(resultDir).multiplyScalar(1 - influence);
-          resultDir.copy(zone.direction).multiplyScalar(influence).add(blendDir);
+          resultDir
+            .copy(zone.direction)
+            .multiplyScalar(influence)
+            .add(blendDir);
           resultDir.normalize();
           strength += (zone.strength - strength) * influence;
         } else if (zone.type === 'mist') {

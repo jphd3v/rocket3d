@@ -441,6 +441,16 @@
         line-height: 1.5;
         letter-spacing: 0.06em;
       }
+
+      .loading-cache-status {
+        min-height: 1rem;
+        font-size: 0.58rem;
+        color: rgba(157, 180, 170, 0.58);
+        text-align: center;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        visibility: hidden;
+      }
     </style>
   </head>
   <body>
@@ -452,6 +462,7 @@
         <div class="progress-text" id="progress-text">0%</div>
       </div>
       <div class="loading-details" id="loading-details">Initializing...</div>
+      <div class="loading-cache-status" id="loading-cache-status"></div>
       <div
         style="
           position: absolute;
@@ -512,24 +523,30 @@
       <div id="options-panel">
         <div class="panel-title">OPTIONS</div>
         <div>
+          Arrows: pitch / roll<br />
+          Space: thrust<br />
+          X: fire<br />
+          C: cycle weapon
+        </div>
+        <div>
           Camera:
-          <span id="hud-camera" class="value-camera">third-person</span>
+          <span id="hud-camera" class="value-camera">third-person</span><br />
+          Z: cycle camera<br />
+          W/A/S/D: height / orbit<br />
+          R: reset camera
+        </div>
+        <div>
+          Pause: P<br />
+          Fullscreen: F
         </div>
         <div id="hud-weapon-row">
           Weapon: <span id="hud-weapon" class="value-on">-</span>
         </div>
-        <div>Fullscreen: F to toggle</div>
-        <div>
-          AI: <span id="hud-ai-toggle" class="value-off">OFF</span> (Press I to
-          toggle)
-        </div>
-        <div>
-          HUD: <span id="hud-hud-toggle" class="value-on">ON</span> (Press H to
-          toggle)
-        </div>
+        <div>AI: <span id="hud-ai-toggle" class="value-off">OFF</span> (I)</div>
+        <div>HUD: <span id="hud-hud-toggle" class="value-on">ON</span> (H)</div>
         <div id="hud-crosshair-row">
           Crosshair: <span id="hud-crosshair-toggle" class="value-on">ON</span>
-          (Press C to toggle)
+          (Y)
         </div>
         <div id="hud-music-row">
           Music: <span id="hud-music" class="value-off">OFF</span>
@@ -541,8 +558,13 @@
         </div>
         <div id="hud-boundaries-row">
           Boundaries:
-          <span id="hud-boundaries" class="value-off">OFF</span> (Press B to
-          toggle)
+          <span id="hud-boundaries" class="value-off">OFF</span> (B)
+        </div>
+        <div>
+          T: dev stats<br />
+          0/1/2/3: LOD visibility<br />
+          L: LOD debug mode<br />
+          O: LOD stats
         </div>
       </div>
 

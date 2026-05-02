@@ -1,5 +1,14 @@
 // Worker interface for generating complete chunk data and mesh bundles.
 import { debugWarn } from './debug.js';
+import {
+  ENABLE_CHUNK_CACHE,
+  ENABLE_LOD_CACHE,
+  ENABLE_TERRAIN_CACHE,
+  getCachedChunkBundle,
+  getCachedLodGeometry,
+  storeChunkBundleInTerrainCache,
+  storeLodGeometryInTerrainCache,
+} from './terrain-cache.js';
 
 function getTaskId(chunkX, chunkY, chunkZ) {
   return `${chunkX},${chunkY},${chunkZ}`;
@@ -22,7 +31,115 @@ function createTask(type, chunkX, chunkY, chunkZ, data) {
     promise,
     resolve: resolveTask,
     reject: rejectTask,
+    cache: null,
   };
+}
+
+function warnCacheRead(error) {
+  debugWarn('[TerrainCache] Cache read failed, generating normally:', error);
+}
+
+function notifyTerrainCacheLookup(workerInterface, persistentHit, cacheType) {
+  if (typeof workerInterface.onTerrainCacheLookup === 'function') {
+    workerInterface.onTerrainCacheLookup(persistentHit, cacheType);
+  }
+}
+
+function canUseChunkCache() {
+  return ENABLE_TERRAIN_CACHE && ENABLE_CHUNK_CACHE;
+}
+
+function canUseLodCache() {
+  return ENABLE_TERRAIN_CACHE && ENABLE_LOD_CACHE;
+}
+
+function processCacheLookupQueue(workerInterface) {
+  while (workerInterface.activeCacheLookups < workerInterface.maxCacheLookups) {
+    let task = workerInterface.cacheLookupQueue.shift();
+    let isBackground = false;
+
+    if (!task) {
+      if (
+        workerInterface.activeBackgroundCacheLookups >=
+        workerInterface.maxBackgroundCacheLookups
+      ) {
+        return;
+      }
+
+      task = workerInterface.backgroundCacheLookupQueue.shift();
+      isBackground = Boolean(task);
+    }
+
+    if (!task) {
+      return;
+    }
+
+    workerInterface.activeCacheLookups++;
+    if (isBackground) {
+      workerInterface.activeBackgroundCacheLookups++;
+    }
+
+    task
+      .lookup()
+      .then(task.resolve)
+      .catch(task.reject)
+      .finally(function () {
+        workerInterface.activeCacheLookups = Math.max(
+          0,
+          workerInterface.activeCacheLookups - 1
+        );
+        if (isBackground) {
+          workerInterface.activeBackgroundCacheLookups = Math.max(
+            0,
+            workerInterface.activeBackgroundCacheLookups - 1
+          );
+        }
+        processCacheLookupQueue(workerInterface);
+      });
+  }
+}
+
+function queueCacheLookup(workerInterface, lookup, background) {
+  return new Promise(function (resolve, reject) {
+    const task = {
+      lookup,
+      resolve,
+      reject,
+    };
+
+    if (background) {
+      workerInterface.backgroundCacheLookupQueue.push(task);
+    } else {
+      workerInterface.cacheLookupQueue.push(task);
+    }
+
+    processCacheLookupQueue(workerInterface);
+  });
+}
+
+function queueTask(workerInterface, task, queueOptions) {
+  const existingTask = workerInterface.pendingTasks.get(task.taskId);
+  if (existingTask) {
+    return existingTask.promise;
+  }
+
+  workerInterface.pendingTasks.set(task.taskId, task);
+  if (queueOptions && queueOptions.urgent === true) {
+    // Gameplay-critical work must cut through startup LOD backlogs. If this
+    // grows more complex, replace the unshift path with a FIFO urgent queue.
+    workerInterface.taskQueue.unshift(task);
+  } else if (queueOptions && queueOptions.priority === true) {
+    workerInterface.taskQueue.push(task);
+  } else if (queueOptions && queueOptions.front === true) {
+    workerInterface.backgroundTaskQueue.unshift(task);
+  } else if (queueOptions && queueOptions.background === true) {
+    workerInterface.backgroundTaskQueue.push(task);
+  } else {
+    workerInterface.taskQueue.push(task);
+  }
+  processQueue(workerInterface);
+
+  return task.promise;
 }
 
 function handleWorkerMessage(workerInterface, workerInfo, message) {
@@ -67,7 +184,7 @@ function handleWorkerMessage(workerInterface, workerInfo, message) {
 
   if (task) {
     if (type === 'lodGeometryGenerated') {
-      task.resolve({
+      const result = {
         lodKey: data.lodKey,
         positions: new Float32Array(data.positions),
         normals: new Float32Array(data.normals),
@@ -75,9 +192,19 @@ function handleWorkerMessage(workerInterface, workerInfo, message) {
         indices: new Uint32Array(data.indices),
         faceCount: data.faceCount,
         diagnostics: data.diagnostics,
-      });
+      };
+
+      task.resolve(result);
+      if (task.cache) {
+        storeLodGeometryInTerrainCache(
+          task.cache.config,
+          task.cache.lodKey,
+          task.cache.geoOptions,
+          result
+        );
+      }
     } else {
-      task.resolve(
+      const result =
         type === 'chunkBundleGenerated'
           ? {
               chunkX: data.chunkX,
@@ -101,8 +228,19 @@ function handleWorkerMessage(workerInterface, workerInfo, message) {
                 indices: new Uint32Array(data.indices),
                 voxelTypes: new Uint8Array(data.voxelTypes),
               },
-            }
-      );
+            };
+
+      task.resolve(result);
+      if (type === 'chunkBundleGenerated' && task.cache) {
+        storeChunkBundleInTerrainCache(
+          task.cache.config,
+          data.chunkX,
+          data.chunkY,
+          data.chunkZ,
+          result.chunkData,
+          result.meshData
+        );
+      }
     }
     workerInterface.pendingTasks.delete(taskId);
   }
@@ -180,6 +318,14 @@ function createTerrainWorkerInterface(options = {}) {
     taskQueue: [],
     backgroundTaskQueue: [],
     pendingTasks: new Map(),
+    pendingCacheLookups: new Map(),
+    cacheLookupQueue: [],
+    backgroundCacheLookupQueue: [],
+    activeCacheLookups: 0,
+    activeBackgroundCacheLookups: 0,
+    maxCacheLookups: 4,
+    maxBackgroundCacheLookups: 1,
+    onTerrainCacheLookup: options.onTerrainCacheLookup || null,
     initialized: false,
   };
 
@@ -224,23 +370,72 @@ function createTerrainWorkerInterface(options = {}) {
     chunkX,
     chunkY,
     chunkZ,
-    config
+    config,
+    cacheOptions = {}
   ) {
     const taskId = `generateChunkBundle:${getTaskId(chunkX, chunkY, chunkZ)}`;
     const existingTask = workerInterface.pendingTasks.get(taskId);
+    const shouldReadCache =
+      canUseChunkCache() && cacheOptions.readCache !== false;
+    const shouldWriteCache =
+      canUseChunkCache() && cacheOptions.writeCache !== false;
 
     if (existingTask) {
       return existingTask.promise;
     }
+    const existingLookup = workerInterface.pendingCacheLookups.get(taskId);
 
-    const task = createTask('generateChunkBundle', chunkX, chunkY, chunkZ, {
-      config,
-    });
-    workerInterface.pendingTasks.set(taskId, task);
-    workerInterface.taskQueue.push(task);
-    processQueue(workerInterface);
+    if (shouldReadCache && existingLookup) {
+      return existingLookup;
+    }
 
-    return task.promise;
+    function enqueueChunkBundleTask(useCache) {
+      const task = createTask('generateChunkBundle', chunkX, chunkY, chunkZ, {
+        config,
+      });
+      if (useCache) {
+        task.cache = { config };
+      }
+      return queueTask(workerInterface, task, {
+        urgent: cacheOptions.urgent === true,
+      });
+    }
+
+    if (!shouldReadCache) {
+      return enqueueChunkBundleTask(shouldWriteCache);
+    }
+
+    const lookupPromise = queueCacheLookup(
+      workerInterface,
+      function () {
+        return getCachedChunkBundle(config, chunkX, chunkY, chunkZ);
+      },
+      false
+    )
+      .then(function (cachedResult) {
+        if (cachedResult) {
+          notifyTerrainCacheLookup(
+            workerInterface,
+            cachedResult.persistentCacheHit,
+            'chunk'
+          );
+          return cachedResult;
+        }
+
+        notifyTerrainCacheLookup(workerInterface, false, 'chunk');
+        return enqueueChunkBundleTask(shouldWriteCache);
+      })
+      .catch(function (error) {
+        warnCacheRead(error);
+        notifyTerrainCacheLookup(workerInterface, false, 'chunk');
+        return enqueueChunkBundleTask(shouldWriteCache);
+      })
+      .finally(function () {
+        workerInterface.pendingCacheLookups.delete(taskId);
+      });
+
+    workerInterface.pendingCacheLookups.set(taskId, lookupPromise);
+    return lookupPromise;
   };
 
   workerInterface.remeshChunk = function (
@@ -261,11 +456,7 @@ function createTerrainWorkerInterface(options = {}) {
       config,
       chunkContexts,
     });
-    workerInterface.pendingTasks.set(taskId, task);
-    workerInterface.taskQueue.push(task);
-    processQueue(workerInterface);
-
-    return task.promise;
+    return queueTask(workerInterface, task, { urgent: true });
   };
 
   workerInterface.generateLodGeometry = function (
@@ -280,36 +471,73 @@ function createTerrainWorkerInterface(options = {}) {
     if (existingTask) {
       return existingTask.promise;
     }
+    const existingLookup = workerInterface.pendingCacheLookups.get(taskId);
 
-    let resolveTask;
-    let rejectTask;
-    const promise = new Promise(function (resolve, reject) {
-      resolveTask = resolve;
-      rejectTask = reject;
-    });
-
-    const task = {
-      taskId,
-      message: {
-        type: 'generateLodGeometry',
-        data: { lodKey, config, geoOptions },
-      },
-      promise,
-      resolve: resolveTask,
-      reject: rejectTask,
-    };
-
-    workerInterface.pendingTasks.set(taskId, task);
-    if (queueOptions.priority === true) {
-      workerInterface.taskQueue.push(task);
-    } else if (queueOptions.front === true) {
-      workerInterface.backgroundTaskQueue.unshift(task);
-    } else {
-      workerInterface.backgroundTaskQueue.push(task);
+    if (existingLookup) {
+      return existingLookup;
     }
-    processQueue(workerInterface);
 
-    return task.promise;
+    function enqueueLodGeometryTask(useCache) {
+      let resolveTask;
+      let rejectTask;
+      const promise = new Promise(function (resolve, reject) {
+        resolveTask = resolve;
+        rejectTask = reject;
+      });
+      const task = {
+        taskId,
+        message: {
+          type: 'generateLodGeometry',
+          data: { lodKey, config, geoOptions },
+        },
+        promise,
+        resolve: resolveTask,
+        reject: rejectTask,
+        cache: useCache ? { config, lodKey, geoOptions } : null,
+      };
+
+      return queueTask(workerInterface, task, {
+        priority: queueOptions.priority,
+        front: queueOptions.front,
+        background: true,
+      });
+    }
+
+    if (!canUseLodCache()) {
+      return enqueueLodGeometryTask(false);
+    }
+
+    const lookupPromise = queueCacheLookup(
+      workerInterface,
+      function () {
+        return getCachedLodGeometry(config, lodKey, geoOptions);
+      },
+      true
+    )
+      .then(function (cachedResult) {
+        if (cachedResult) {
+          notifyTerrainCacheLookup(
+            workerInterface,
+            cachedResult.persistentCacheHit,
+            'lod'
+          );
+          return cachedResult;
+        }
+
+        notifyTerrainCacheLookup(workerInterface, false, 'lod');
+        return enqueueLodGeometryTask(true);
+      })
+      .catch(function (error) {
+        warnCacheRead(error);
+        notifyTerrainCacheLookup(workerInterface, false, 'lod');
+        return enqueueLodGeometryTask(true);
+      })
+      .finally(function () {
+        workerInterface.pendingCacheLookups.delete(taskId);
+      });
+
+    workerInterface.pendingCacheLookups.set(taskId, lookupPromise);
+    return lookupPromise;
   };
 
   workerInterface.unloadChunk = function (chunkX, chunkY, chunkZ, config) {
@@ -334,7 +562,11 @@ function createTerrainWorkerInterface(options = {}) {
     }
     workerInterface.workers = [];
     workerInterface.taskQueue = [];
+    workerInterface.backgroundTaskQueue = [];
     workerInterface.pendingTasks.clear();
+    workerInterface.pendingCacheLookups.clear();
+    workerInterface.cacheLookupQueue = [];
+    workerInterface.backgroundCacheLookupQueue = [];
     workerInterface.initialized = false;
   };
 

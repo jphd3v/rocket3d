@@ -11,6 +11,7 @@ import {
   debugTimeEnd,
   debugWarn,
 } from '../debug.js';
+import { hasRuntimeVoxelDeltasInChunk } from '../voxel.js';
 
 export function applyLodDistanceFade(material) {
   if (!material || !material.userData || material.userData.lodDistanceFade) {
@@ -1004,6 +1005,17 @@ function isFullChunkBoundary(chunkManager, coords) {
 function shouldShowMidLodChunk(chunkManager, chunkKey, coords) {
   if (!hasFullDetailCoverage(chunkManager, chunkKey)) {
     return true;
+  }
+
+  if (
+    hasRuntimeVoxelDeltasInChunk(
+      chunkManager.world,
+      coords.x,
+      coords.y,
+      coords.z
+    )
+  ) {
+    return false;
   }
 
   return isFullChunkBoundary(chunkManager, coords);

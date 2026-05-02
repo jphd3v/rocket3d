@@ -6,6 +6,7 @@ class LoadingManager {
     this.progressBar = document.getElementById('progress-bar');
     this.progressText = document.getElementById('progress-text');
     this.loadingDetails = document.getElementById('loading-details');
+    this.loadingCacheStatus = document.getElementById('loading-cache-status');
     this.loadingScreen = document.getElementById('loading-screen');
     this.totalChunksToLoad = 0;
     this.loadedChunks = 0;
@@ -14,10 +15,13 @@ class LoadingManager {
     this.totalChunksToMesh = 0;
     this.isLoading = true;
     this.manualProgress = null;
+    this.terrainCacheLookups = 0;
+    this.terrainCachePersistentHits = 0;
 
     if (this.loadingDetails) {
       this.loadingDetails.textContent = 'Initializing...';
     }
+    this.updateCacheStatus();
   }
 
   setManualProgress(percent, details) {
@@ -29,7 +33,38 @@ class LoadingManager {
       percent: Math.max(0, Math.min(100, percent)),
       details: details || 'Preparing launch...',
     };
+    this.updateCacheStatus();
     this.updateProgress();
+  }
+
+  terrainCacheLookup(persistentHit) {
+    if (!this.isLoading) {
+      return;
+    }
+    this.terrainCacheLookups++;
+    if (persistentHit) {
+      this.terrainCachePersistentHits++;
+    }
+    this.updateCacheStatus();
+    this.updateProgress();
+  }
+
+  updateCacheStatus() {
+    if (!this.loadingCacheStatus) {
+      return;
+    }
+
+    if (
+      this.terrainCacheLookups > 0 &&
+      this.terrainCacheLookups === this.terrainCachePersistentHits
+    ) {
+      this.loadingCacheStatus.textContent =
+        'loading from browser terrain cache';
+      this.loadingCacheStatus.style.visibility = 'visible';
+    } else {
+      this.loadingCacheStatus.textContent = '';
+      this.loadingCacheStatus.style.visibility = 'hidden';
+    }
   }
 
   clearManualProgress() {
@@ -139,16 +174,18 @@ class LoadingManager {
     }
 
     if (this.loadingDetails) {
+      let details;
       if (this.loadedChunks < this.totalChunksToLoad) {
-        this.loadingDetails.textContent = 'Generating terrain...';
+        details = 'Generating terrain...';
       } else if (
         effectiveChunksToMesh > 0 &&
         this.meshedChunks < effectiveChunksToMesh
       ) {
-        this.loadingDetails.textContent = 'Building world...';
+        details = 'Building world...';
       } else {
-        this.loadingDetails.textContent = 'Preparing launch...';
+        details = 'Preparing launch...';
       }
+      this.loadingDetails.textContent = details;
     } else {
       debugError('Loading details element not found!');
     }

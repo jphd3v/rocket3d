@@ -655,6 +655,7 @@ export function createChunkManager(
     onChunkLoaded: options.onChunkLoaded || noop,
     onChunkMeshed: options.onChunkMeshed || noop,
     onChunkEmpty: options.onChunkEmpty || noop,
+    onTerrainCacheLookup: options.onTerrainCacheLookup || noop,
 
     // Statistics
     stats: {
@@ -716,6 +717,7 @@ async function initializeWorkers(chunkManager) {
     chunkManager.workerInterface = await initializeTerrainWorkers({
       workerCount: 3,
       backgroundWorkerReserve: 1,
+      onTerrainCacheLookup: chunkManager.onTerrainCacheLookup,
     });
     chunkManager.workersInitialized = true;
   } catch (error) {
@@ -892,7 +894,7 @@ async function prepareChunkMeshData(chunkManager, chunkKey, chunkCoords) {
   );
 }
 
-function queueChunkLoad(chunkManager, chunk) {
+function queueChunkLoad(chunkManager, chunk, options = {}) {
   if (
     !chunk ||
     chunk.x === undefined ||
@@ -916,6 +918,7 @@ function queueChunkLoad(chunkManager, chunk) {
     x: chunk.x,
     y: chunk.y,
     z: chunk.z,
+    useTerrainCache: options.useTerrainCache === true,
   });
 }
 
@@ -934,7 +937,10 @@ function processChunkLoadQueue(chunkManager) {
     }
 
     chunkManager.activeChunkLoads++;
-    loadChunk(chunkManager, chunk, { immediateMesh: false })
+    loadChunk(chunkManager, chunk, {
+      immediateMesh: false,
+      useTerrainCache: chunk.useTerrainCache === true,
+    })
       .catch(function () {})
       .finally(function () {
         chunkManager.activeChunkLoads = Math.max(
@@ -981,7 +987,14 @@ async function loadChunk(chunkManager, chunk, options = {}) {
           chunk.x,
           chunk.y,
           chunk.z,
-          chunkManager.terrainWorkerConfig
+          chunkManager.terrainWorkerConfig,
+          {
+            // Runtime streaming skips cache reads so nearby full chunks do not
+            // wait behind IndexedDB. Startup/warmup may opt into reads.
+            readCache: options.useTerrainCache === true,
+            writeCache: true,
+            urgent: options.useTerrainCache !== true,
+          }
         );
         chunkData = result.chunkData;
         meshData = result.meshData;
@@ -1177,6 +1190,7 @@ function refreshModifiedChunks(chunkManager, maxChunksPerFrame = 1) {
 
     const state = chunkManager.chunkStates.get(key);
     if (state === ChunkState.LOADING || state === ChunkState.MESHING) {
+      chunkManager.world.modifiedChunks.add(key);
       continue;
     }
 
@@ -1522,6 +1536,7 @@ export function createChunkManagerWithTerrain(world, renderer, options = {}) {
     seed,
     chunkSize,
     voxelSize: world.voxelSize,
+    levelId: level && level.id ? level.id : 'default-level',
   };
 
   // Build generator config, optionally with custom level graph
@@ -1814,7 +1829,7 @@ export async function loadChunksAround(
 
     for (const coords of chunkCoords) {
       chunkKeys.push(chunkKey(coords.x, coords.y, coords.z));
-      queueChunkLoad(chunkManager, coords);
+      queueChunkLoad(chunkManager, coords, { useTerrainCache: true });
     }
 
     while (!areChunksLoadedForStartup(chunkManager, chunkKeys)) {
@@ -1859,7 +1874,7 @@ export async function warmupChunksAround(
     );
 
     for (const coords of chunkCoords) {
-      queueChunkLoad(chunkManager, coords);
+      queueChunkLoad(chunkManager, coords, { useTerrainCache: true });
     }
 
     while (performance.now() < deadline) {
