@@ -45,6 +45,18 @@ function notifyTerrainCacheLookup(workerInterface, persistentHit, cacheType) {
   }
 }
 
+function deferTerrainCacheWrite(writeCache) {
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.requestIdleCallback === 'function'
+  ) {
+    window.requestIdleCallback(writeCache, { timeout: 1000 });
+    return;
+  }
+
+  setTimeout(writeCache, 0);
+}
+
 function canUseChunkCache() {
   return ENABLE_TERRAIN_CACHE && ENABLE_CHUNK_CACHE;
 }
@@ -125,9 +137,7 @@ function queueTask(workerInterface, task, queueOptions) {
 
   workerInterface.pendingTasks.set(task.taskId, task);
   if (queueOptions && queueOptions.urgent === true) {
-    // Gameplay-critical work must cut through startup LOD backlogs. If this
-    // grows more complex, replace the unshift path with a FIFO urgent queue.
-    workerInterface.taskQueue.unshift(task);
+    workerInterface.urgentTaskQueue.push(task);
   } else if (queueOptions && queueOptions.priority === true) {
     workerInterface.taskQueue.push(task);
   } else if (queueOptions && queueOptions.front === true) {
@@ -196,12 +206,14 @@ function handleWorkerMessage(workerInterface, workerInfo, message) {
 
       task.resolve(result);
       if (task.cache) {
-        storeLodGeometryInTerrainCache(
-          task.cache.config,
-          task.cache.lodKey,
-          task.cache.geoOptions,
-          result
-        );
+        deferTerrainCacheWrite(function () {
+          storeLodGeometryInTerrainCache(
+            task.cache.config,
+            task.cache.lodKey,
+            task.cache.geoOptions,
+            result
+          );
+        });
       }
     } else {
       const result =
@@ -232,14 +244,16 @@ function handleWorkerMessage(workerInterface, workerInfo, message) {
 
       task.resolve(result);
       if (type === 'chunkBundleGenerated' && task.cache) {
-        storeChunkBundleInTerrainCache(
-          task.cache.config,
-          data.chunkX,
-          data.chunkY,
-          data.chunkZ,
-          result.chunkData,
-          result.meshData
-        );
+        deferTerrainCacheWrite(function () {
+          storeChunkBundleInTerrainCache(
+            task.cache.config,
+            data.chunkX,
+            data.chunkY,
+            data.chunkZ,
+            result.chunkData,
+            result.meshData
+          );
+        });
       }
     }
     workerInterface.pendingTasks.delete(taskId);
@@ -269,6 +283,7 @@ function handleWorkerError(workerInterface, workerInfo, error) {
 
 function processQueue(workerInterface) {
   if (
+    workerInterface.urgentTaskQueue.length === 0 &&
     workerInterface.taskQueue.length === 0 &&
     workerInterface.backgroundTaskQueue.length === 0
   ) {
@@ -282,7 +297,10 @@ function processQueue(workerInterface) {
     return;
   }
 
-  let task = workerInterface.taskQueue.shift();
+  let task = workerInterface.urgentTaskQueue.shift();
+  if (!task) {
+    task = workerInterface.taskQueue.shift();
+  }
   if (!task) {
     const availableWorkerCount = workerInterface.workers.filter(
       function (workerInfo) {
@@ -316,6 +334,7 @@ function createTerrainWorkerInterface(options = {}) {
         ? options.backgroundWorkerReserve
         : 1,
     taskQueue: [],
+    urgentTaskQueue: [],
     backgroundTaskQueue: [],
     pendingTasks: new Map(),
     pendingCacheLookups: new Map(),
@@ -561,6 +580,7 @@ function createTerrainWorkerInterface(options = {}) {
       workerInfo.worker.terminate();
     }
     workerInterface.workers = [];
+    workerInterface.urgentTaskQueue = [];
     workerInterface.taskQueue = [];
     workerInterface.backgroundTaskQueue = [];
     workerInterface.pendingTasks.clear();

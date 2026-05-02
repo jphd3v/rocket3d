@@ -1,6 +1,6 @@
 import { DEBUG, debugLog, debugWarn } from './debug.js';
 
-export const TERRAIN_CACHE_VERSION = 'terrain-v1';
+export const TERRAIN_CACHE_VERSION = 'terrain-v2';
 export const MESHER_CACHE_VERSION = 'mesh-v1';
 export const COLOR_CACHE_VERSION = 'color-v1';
 export const ENABLE_TERRAIN_CACHE = true;
@@ -155,6 +155,14 @@ function normalizeLevelId(config) {
   return String((config && config.levelId) || 'default-level');
 }
 
+function getConfigChunkSize(config) {
+  return config && typeof config.chunkSize === 'number' ? config.chunkSize : 0;
+}
+
+function getConfigVoxelSize(config) {
+  return config && typeof config.voxelSize === 'number' ? config.voxelSize : 0;
+}
+
 function buildCommonKeyParts(config) {
   return [
     CACHE_PREFIX,
@@ -172,6 +180,128 @@ function toIndexArray(buffer, indexType) {
   return indexType === 'uint16'
     ? new Uint16Array(buffer)
     : new Uint32Array(buffer);
+}
+
+function isArrayBuffer(value) {
+  return value instanceof ArrayBuffer;
+}
+
+function isValidIndexType(indexType) {
+  return indexType === 'uint16' || indexType === 'uint32';
+}
+
+function hasExpectedMetadata(record, config, lodLevel) {
+  var metadata = record ? record.metadata : null;
+
+  return Boolean(
+    metadata &&
+    metadata.schemaVersion === 1 &&
+    metadata.levelId === normalizeLevelId(config) &&
+    metadata.seed === normalizeSeed(config ? config.seed : null) &&
+    metadata.terrainVersion === TERRAIN_CACHE_VERSION &&
+    metadata.meshVersion === MESHER_CACHE_VERSION &&
+    metadata.colorVersion === COLOR_CACHE_VERSION &&
+    metadata.chunkSize === getConfigChunkSize(config) &&
+    metadata.voxelSize === getConfigVoxelSize(config) &&
+    metadata.lodLevel === lodLevel
+  );
+}
+
+function hasValidMeshPayload(payload, includeColors) {
+  var positionCount;
+  var normalCount;
+  var colorCount;
+  var indexBytes;
+
+  if (
+    !payload ||
+    !isArrayBuffer(payload.positions) ||
+    !isArrayBuffer(payload.normals) ||
+    !isArrayBuffer(payload.indices) ||
+    !isValidIndexType(payload.indexType)
+  ) {
+    return false;
+  }
+
+  if (
+    payload.positions.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0 ||
+    payload.normals.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0
+  ) {
+    return false;
+  }
+
+  positionCount = payload.positions.byteLength / Float32Array.BYTES_PER_ELEMENT;
+  normalCount = payload.normals.byteLength / Float32Array.BYTES_PER_ELEMENT;
+  if (positionCount % 3 !== 0 || normalCount !== positionCount) {
+    return false;
+  }
+
+  indexBytes =
+    payload.indexType === 'uint16'
+      ? Uint16Array.BYTES_PER_ELEMENT
+      : Uint32Array.BYTES_PER_ELEMENT;
+  if (payload.indices.byteLength % indexBytes !== 0) {
+    return false;
+  }
+
+  if (includeColors) {
+    if (!isArrayBuffer(payload.colors)) {
+      return false;
+    }
+    if (payload.colors.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) {
+      return false;
+    }
+    colorCount = payload.colors.byteLength / Float32Array.BYTES_PER_ELEMENT;
+    if (colorCount !== positionCount) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isValidChunkRecord(record, config) {
+  var payload = record ? record.payload : null;
+  var chunkSize = getConfigChunkSize(config);
+  var expectedChunkDataLength = chunkSize * chunkSize * chunkSize;
+  var positionCount =
+    payload && isArrayBuffer(payload.positions)
+      ? payload.positions.byteLength / Float32Array.BYTES_PER_ELEMENT
+      : 0;
+  var indexCount =
+    payload && isArrayBuffer(payload.indices)
+      ? payload.indices.byteLength /
+        (payload.indexType === 'uint16'
+          ? Uint16Array.BYTES_PER_ELEMENT
+          : Uint32Array.BYTES_PER_ELEMENT)
+      : 0;
+  var faceCount = positionCount / 12;
+
+  return Boolean(
+    hasExpectedMetadata(record, config, 0) &&
+    payload &&
+    isArrayBuffer(payload.chunkData) &&
+    payload.chunkData.byteLength === expectedChunkDataLength &&
+    isArrayBuffer(payload.voxelTypes) &&
+    hasValidMeshPayload(payload, false) &&
+    (positionCount === 0
+      ? indexCount === 0 && payload.voxelTypes.byteLength === 0
+      : positionCount % 12 === 0 &&
+        indexCount % 3 === 0 &&
+        (payload.voxelTypes.byteLength === 0 ||
+          payload.voxelTypes.byteLength === faceCount))
+  );
+}
+
+function isValidLodRecord(record, config, geoOptions) {
+  var payload = record ? record.payload : null;
+  var lodLevel = geoOptions && geoOptions.blockSize ? geoOptions.blockSize : 1;
+
+  return Boolean(
+    hasExpectedMetadata(record, config, lodLevel) &&
+    payload &&
+    hasValidMeshPayload(payload, true)
+  );
 }
 
 function isRecordFromPreviousSession(record) {
@@ -354,7 +484,7 @@ export function getCachedChunkBundle(config, chunkX, chunkY, chunkZ) {
   var key = buildChunkTerrainCacheKey(config, chunkX, chunkY, chunkZ);
 
   return getTerrainRecord(key).then(function (record) {
-    if (!record || !record.payload || !record.payload.chunkData) {
+    if (!record || !isValidChunkRecord(record, config)) {
       return null;
     }
 
@@ -407,10 +537,13 @@ export function storeChunkBundleInTerrainCache(
     byteSize: getPayloadByteSize(payload),
     payload: payload,
     metadata: {
+      schemaVersion: 1,
       levelId: normalizeLevelId(config),
       seed: normalizeSeed(config ? config.seed : null),
       lodLevel: 0,
       chunkKey: chunkX + ',' + chunkY + ',' + chunkZ,
+      chunkSize: getConfigChunkSize(config),
+      voxelSize: getConfigVoxelSize(config),
       terrainVersion: TERRAIN_CACHE_VERSION,
       meshVersion: MESHER_CACHE_VERSION,
       colorVersion: COLOR_CACHE_VERSION,
@@ -426,7 +559,7 @@ export function getCachedLodGeometry(config, lodKey, geoOptions) {
   var key = buildLodTerrainCacheKey(config, lodKey, geoOptions);
 
   return getTerrainRecord(key).then(function (record) {
-    if (!record || !record.payload) {
+    if (!record || !isValidLodRecord(record, config, geoOptions)) {
       return null;
     }
 
@@ -473,10 +606,15 @@ export function storeLodGeometryInTerrainCache(
     byteSize: getPayloadByteSize(payload),
     payload: payload,
     metadata: {
+      schemaVersion: 1,
       levelId: normalizeLevelId(config),
       seed: normalizeSeed(config ? config.seed : null),
       lodLevel: geoOptions && geoOptions.blockSize ? geoOptions.blockSize : 1,
       chunkKey: String(lodKey),
+      chunkSize: getConfigChunkSize(config),
+      voxelSize: getConfigVoxelSize(config),
+      lodBlockSize:
+        geoOptions && geoOptions.blockSize ? geoOptions.blockSize : 1,
       terrainVersion: TERRAIN_CACHE_VERSION,
       meshVersion: MESHER_CACHE_VERSION,
       colorVersion: COLOR_CACHE_VERSION,
