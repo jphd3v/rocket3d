@@ -7,6 +7,8 @@ class LoadingManager {
     this.progressText = document.getElementById('progress-text');
     this.loadingDetails = document.getElementById('loading-details');
     this.loadingCacheStatus = document.getElementById('loading-cache-status');
+    this.loadingLevel = document.getElementById('loading-level');
+    this.loadingSeed = document.getElementById('loading-seed');
     this.loadingScreen = document.getElementById('loading-screen');
     this.totalChunksToLoad = 0;
     this.loadedChunks = 0;
@@ -22,6 +24,17 @@ class LoadingManager {
       this.loadingDetails.textContent = 'Initializing...';
     }
     this.updateCacheStatus();
+  }
+
+  setGameConfig(config) {
+    if (this.loadingLevel) {
+      this.loadingLevel.textContent =
+        config && config.levelId ? config.levelId : '-';
+    }
+
+    if (this.loadingSeed) {
+      this.loadingSeed.textContent = config && config.seed ? config.seed : '-';
+    }
   }
 
   setManualProgress(percent, details) {

@@ -20,6 +20,7 @@ import {
 import { CHUNK_SIZE_VOXELS, WORLD_UNITS_PER_VOXEL } from './world-units.js';
 import { getChunkWorldSize } from './voxel.js';
 import {
+  DEFAULT_GAME_CONFIG,
   INITIAL_LOAD_RADIUS,
   SOUNDTRACK_VOLUME,
   START_POSITION,
@@ -30,6 +31,8 @@ import {
   STARTUP_WARMUP_BUDGET_MS,
   STARTUP_WARMUP_RADIUS,
   STREAM_LOAD_RADIUS,
+  getGameConfigFromUrl,
+  hasExplicitGameConfigInUrl,
 } from './game-config.js';
 import { getActiveLevel } from './levels/index.js';
 import {
@@ -38,8 +41,7 @@ import {
 } from './lod/far-visual-shell.js';
 import { DEBUG, debugLog, debugWarn, debugError } from './debug.js';
 import { clearTerrainCacheFromUrl } from './terrain-cache.js';
-
-var DEFAULT_LEVEL_SEED = 'rocket3d-dev-seed-01';
+import { createGameMenu } from './game-menu.js';
 
 function hashLevelSeed(str) {
   var h = 1779033703 ^ str.length;
@@ -142,10 +144,24 @@ function getStartupDirection(activeLevel) {
 
 async function main() {
   try {
+    var gameMenu = createGameMenu();
+    var gameConfig = getGameConfigFromUrl();
+    var hasExplicitConfig = hasExplicitGameConfigInUrl();
+
     await clearTerrainCacheFromUrl();
+
+    if (!hasExplicitConfig) {
+      var loadingScreen = document.getElementById('loading-screen');
+      if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+      }
+      gameMenu.showStartMenu(DEFAULT_GAME_CONFIG);
+      return;
+    }
 
     // Initialize loading manager
     const loadingManager = new LoadingManager();
+    loadingManager.setGameConfig(gameConfig);
     const soundtrack = createSoundtrackController({
       tracks: soundtrackTracks,
       volume: SOUNDTRACK_VOLUME,
@@ -206,10 +222,11 @@ async function main() {
     const totalChunks = Math.pow(INITIAL_LOAD_RADIUS * 2 + 1, 3);
 
     // Determine active level and derive seed
-    var activeLevel = getActiveLevel();
+    var activeLevel = getActiveLevel(gameConfig.levelId);
     var startupPosition = getStartupPosition(activeLevel);
     var startupDirection = getStartupDirection(activeLevel);
-    var levelSeedString = DEFAULT_LEVEL_SEED + ':' + activeLevel.seed;
+    var levelSeedString =
+      activeLevel.id + ':' + activeLevel.seed + ':' + gameConfig.seed;
     var levelSeedNumber = hashLevelSeed(levelSeedString);
     scene.userData.levelLoadStartTime = performance.now();
     scene.userData.levelLoadCompleteTime = null;
@@ -468,7 +485,9 @@ async function main() {
       function () {
         toggleFullscreen();
       },
-      activeLevel
+      activeLevel,
+      gameConfig,
+      gameMenu
     );
 
     // Periodic terrain LOD distance debug logging

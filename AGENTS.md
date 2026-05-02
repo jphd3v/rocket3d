@@ -28,8 +28,6 @@ Run `npm run format` and `npm run lint` after significant changes to maintain co
 - Avoid arrow functions unless explicitly requested or required by some special use case
 - Avoid complex and latest JavaScript features, cool tricks, and magic; try to always use simple functions and create simple and straightforward code
 
-Add a short section like this to AGENTS.md:
-
 ## Core Design Principles
 
 All coding implementation in this project must follow these fundamental principles:
@@ -88,4 +86,8 @@ The absence of tests is a deliberate architectural decision to:
 
 All code should be written with clarity and simplicity as the primary goals, making it easily understandable without the need for test documentation.
 
-Add a short section like this to AGENTS.md:
+## Skills
+
+Skills provide specialized instructions and workflows for specific tasks.
+Use the skill tool to load a skill when a task matches its description.
+No skills are currently available.

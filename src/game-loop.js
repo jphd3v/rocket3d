@@ -61,7 +61,9 @@ function initGameLoop(
   audioSystem,
   lodSystems,
   toggleFullscreen,
-  activeLevel
+  activeLevel,
+  gameConfig,
+  gameMenu
 ) {
   const INV_MAX_FPS = 1 / 60;
   let frameDelta = 0;
@@ -77,6 +79,8 @@ function initGameLoop(
   let hudEnabled = true;
   let crosshairEnabled = true;
   let devMode = false;
+  let gamePaused = false;
+  let pauseOverlayMode = 'pause';
   let debugLod0ChunksEnabled = true;
   var farShellDebugMode = 0;
   var fullChunkDebugMaterial = new THREE.MeshBasicMaterial({
@@ -98,6 +102,70 @@ function initGameLoop(
     nearestVisibleDistance: 96,
     blockSizes: [2, 4, 8],
   };
+
+  function updatePauseOverlay() {
+    var pauseOverlay = document.getElementById('menus');
+
+    if (pauseOverlay) {
+      pauseOverlay.style.display =
+        gamePaused && pauseOverlayMode === 'pause' ? 'block' : 'none';
+    }
+
+    if (!gameMenu) {
+      return;
+    }
+
+    if (gamePaused && pauseOverlayMode === 'menu') {
+      gameMenu.openPauseMenu(gameConfig);
+      return;
+    }
+
+    gameMenu.close();
+  }
+
+  function setPauseState(nextPaused, overlayMode) {
+    if (!nextPaused) {
+      if (!gamePaused) {
+        return;
+      }
+
+      gamePaused = false;
+      updatePauseOverlay();
+      timer.update();
+      if (audioSystem && typeof audioSystem.playUnpause === 'function') {
+        audioSystem.playUnpause();
+      }
+      if (soundtrack && soundtrack.getUiState().isEnabled) {
+        soundtrack.load();
+      }
+      return;
+    }
+
+    pauseOverlayMode = overlayMode || 'pause';
+
+    if (!gamePaused) {
+      gamePaused = true;
+      frameDelta = 0;
+      if (audioSystem && typeof audioSystem.playPause === 'function') {
+        audioSystem.playPause();
+      }
+      if (audioSystem && typeof audioSystem.suspendAll === 'function') {
+        audioSystem.suspendAll();
+      }
+      if (soundtrack && typeof soundtrack.suspend === 'function') {
+        soundtrack.suspend();
+      }
+    }
+
+    updatePauseOverlay();
+  }
+
+  if (gameMenu && typeof gameMenu.setResumeHandler === 'function') {
+    gameMenu.setResumeHandler(function () {
+      setPauseState(false);
+    });
+  }
+
   setDevMode(devMode);
   stats.dom.style.display = devMode ? 'block' : 'none';
   let frameCount = 0;
@@ -525,7 +593,6 @@ function initGameLoop(
   let cameraBlastShakeTime = 0;
   let previousHealth = 100;
   let aiEnabled = false;
-  let gamePaused = false;
 
   const explosionFlareParticles = [];
   const explosionSmokeParticles = [];
@@ -2079,30 +2146,21 @@ function initGameLoop(
 
     inputs = pollInputs();
 
-    if (inputs.forceOptions) {
-      gamePaused = !gamePaused;
-      document.getElementById('menus').style.display = gamePaused
-        ? 'block'
-        : 'none';
-      if (gamePaused) {
-        frameDelta = 0;
-        if (audioSystem && typeof audioSystem.playPause === 'function') {
-          audioSystem.playPause();
-        }
-        if (audioSystem && typeof audioSystem.suspendAll === 'function') {
-          audioSystem.suspendAll();
-        }
-        if (soundtrack && typeof soundtrack.suspend === 'function') {
-          soundtrack.suspend();
-        }
+    if (inputs.toggleMenu && gameMenu) {
+      if (!gamePaused) {
+        setPauseState(true, 'menu');
+      } else if (pauseOverlayMode === 'menu') {
+        setPauseState(false);
       } else {
-        timer.update();
-        if (audioSystem && typeof audioSystem.playUnpause === 'function') {
-          audioSystem.playUnpause();
-        }
-        if (soundtrack && soundtrack.getUiState().isEnabled) {
-          soundtrack.load();
-        }
+        setPauseState(true, 'menu');
+      }
+    }
+
+    if (inputs.forceOptions) {
+      if (gamePaused) {
+        setPauseState(false);
+      } else {
+        setPauseState(true, 'pause');
       }
     }
 
@@ -2157,7 +2215,8 @@ function initGameLoop(
         weaponSystem.getUiState(),
         aiEnabled,
         hudEnabled,
-        crosshairEnabled
+        crosshairEnabled,
+        gameConfig
       );
 
       timer.update();
@@ -2931,7 +2990,8 @@ function initGameLoop(
         weaponSystem.getUiState(),
         aiEnabled,
         hudEnabled,
-        crosshairEnabled
+        crosshairEnabled,
+        gameConfig
       );
       lastUiUpdateTime = currentTime;
     }

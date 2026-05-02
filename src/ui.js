@@ -1564,8 +1564,21 @@ function updateOptions(
   weaponState = null,
   aiEnabled = false,
   hudEnabled = true,
-  crosshairEnabled = true
+  crosshairEnabled = true,
+  gameConfig = null
 ) {
+  var levelEl = document.getElementById('hud-level');
+  var seedEl = document.getElementById('hud-seed');
+
+  if (levelEl) {
+    levelEl.textContent =
+      gameConfig && gameConfig.levelId ? gameConfig.levelId : '-';
+  }
+
+  if (seedEl) {
+    seedEl.textContent = gameConfig && gameConfig.seed ? gameConfig.seed : '-';
+  }
+
   const cameraEl = document.getElementById('hud-camera');
   cameraEl.textContent = cameraMode;
 

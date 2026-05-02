@@ -288,7 +288,7 @@ function buildSkyOpenings() {
 }
 
 export var level03SkyVault = {
-  id: 'level-03-sky-vault',
+  id: 'level-03',
   name: 'Sky Vault',
   seed: 'level-03',
   startingChamber: {

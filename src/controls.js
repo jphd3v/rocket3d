@@ -11,6 +11,7 @@ const ONE_SHOT_INPUT_KEYS = [
   'toggleHud',
   'toggleCrosshair',
   'toggleDevMode',
+  'toggleMenu',
   'forceOptions',
   'toggleLod0',
   'toggleLod1',
@@ -51,6 +52,7 @@ function createEmptyInputs() {
     toggleHud: 0,
     toggleCrosshair: 0,
     toggleDevMode: 0,
+    toggleMenu: 0,
     forceOptions: 0,
     toggleLod0: 0,
     toggleLod1: 0,
@@ -101,8 +103,31 @@ function isStandardGamepad(gamepad) {
   return gamepad && gamepad.mapping === 'standard';
 }
 
+function isEditableTarget(target) {
+  if (!target || typeof target !== 'object') {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  var tagName = typeof target.tagName === 'string' ? target.tagName : '';
+
+  return (
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT' ||
+    tagName === 'BUTTON'
+  );
+}
+
 function keydown(heldInputs, oneShotInputs, event) {
   if (event.altKey || event.repeat) {
+    return;
+  }
+
+  if (isEditableTarget(event.target) && event.code !== 'Escape') {
     return;
   }
 
@@ -195,6 +220,10 @@ function keydown(heldInputs, oneShotInputs, event) {
 
     case 'KeyT':
       oneShotInputs.toggleDevMode = 1;
+      break;
+
+    case 'Escape':
+      oneShotInputs.toggleMenu = 1;
       break;
 
     case 'KeyP':
@@ -382,6 +411,7 @@ function pollGamepadInputs() {
   const reverseViewButtonIndex = standardGamepad ? -1 : 5;
   const flightHorizontalAxisIndex = standardGamepad ? 0 : 1;
   const flightVerticalAxisIndex = standardGamepad ? 1 : 2;
+  const toggleMenuButtonIndex = 10;
   const forceOptionsButtonIndex = 11;
   const cameraResetButtonIndex = 14;
   const thrustButtonValue =
@@ -456,6 +486,10 @@ function pollGamepadInputs() {
 
   if (buttonPressed(gamepad.buttons[13])) {
     inputs.cyclePerspective = 1;
+  }
+
+  if (buttonPressed(gamepad.buttons[toggleMenuButtonIndex])) {
+    inputs.toggleMenu = 1;
   }
 
   if (buttonPressed(gamepad.buttons[forceOptionsButtonIndex])) {
