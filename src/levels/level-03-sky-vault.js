@@ -288,9 +288,9 @@ function buildSkyOpenings() {
 }
 
 export var level03SkyVault = {
-  id: 'level-03',
+  id: 'level3',
   name: 'Sky Vault',
-  seed: 'level-03',
+  seed: 'level3',
   startingChamber: {
     center: { x: SPAWN.x, y: SPAWN.y, z: SPAWN.z },
     radius: { x: 56, y: 32, z: 56 },

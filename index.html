@@ -245,6 +245,18 @@
         line-height: 1.6;
       }
 
+      .game-menu-warning {
+        display: none;
+        margin-top: 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 196, 120, 0.22);
+        background: rgba(58, 34, 10, 0.42);
+        color: #ffd9a0;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
       .game-menu-preview span {
         color: #fff0a8;
       }
@@ -640,6 +652,21 @@
         text-transform: uppercase;
         visibility: hidden;
       }
+
+      .loading-warning {
+        display: none;
+        max-width: min(640px, calc(100vw - 48px));
+        margin-top: 0.9rem;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 196, 120, 0.24);
+        background: rgba(58, 34, 10, 0.42);
+        color: #ffd9a0;
+        font-size: 0.72rem;
+        line-height: 1.55;
+        text-align: center;
+        letter-spacing: 0.05em;
+      }
     </style>
   </head>
   <body>
@@ -656,6 +683,7 @@
       </div>
       <div class="loading-details" id="loading-details">Initializing...</div>
       <div class="loading-cache-status" id="loading-cache-status"></div>
+      <div class="loading-warning" id="loading-warning"></div>
       <div
         style="
           position: absolute;
@@ -694,6 +722,9 @@
       <div id="stats-panel">
         <div>Level: <span id="hud-level">-</span></div>
         <div>Seed: <span id="hud-seed">-</span></div>
+        <div id="hud-warning-row" style="display: none">
+          Warning: <span id="hud-warning">-</span>
+        </div>
         <div>Position: <span id="hud-position">0, 0, 0</span></div>
         <div>
           Health: <span id="hud-health" class="value-health">100%</span>
@@ -824,9 +855,10 @@
             <div>Level: <span id="menu-preview-level">-</span></div>
             <div>Seed: <span id="menu-preview-seed">-</span></div>
           </div>
+          <div class="game-menu-warning" id="game-menu-warning"></div>
           <label class="game-menu-toggle" for="menu-clear-terrain-cache">
             <input id="menu-clear-terrain-cache" type="checkbox" />
-            <span>Clear terrain cache before loading</span>
+            <span>Clear browser terrain cache before loading</span>
           </label>
           <div class="game-menu-actions">
             <button class="game-menu-button" id="menu-resume" type="button">

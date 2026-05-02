@@ -82,6 +82,9 @@ function initGameLoop(
   let gamePaused = false;
   let pauseOverlayMode = 'pause';
   let debugLod0ChunksEnabled = true;
+  var gameConfigWarnings =
+    gameConfig && Array.isArray(gameConfig.warnings) ? gameConfig.warnings : [];
+  var gameConfigWarningText = gameConfigWarnings.join(' ');
   var farShellDebugMode = 0;
   var fullChunkDebugMaterial = new THREE.MeshBasicMaterial({
     color: LOD_DEBUG_COLORS.FULL_CHUNKS,
@@ -116,7 +119,7 @@ function initGameLoop(
     }
 
     if (gamePaused && pauseOverlayMode === 'menu') {
-      gameMenu.openPauseMenu(gameConfig);
+      gameMenu.openPauseMenu(gameConfig, gameConfigWarnings);
       return;
     }
 
@@ -261,7 +264,10 @@ function initGameLoop(
   );
   const updateFlames = initFlameSystem(rocket, scene);
   const updateControlThrusters = initControlThrusters(rocket, scene);
-  const windField = initWindField(activeLevel);
+  const windField = initWindField(
+    activeLevel,
+    activeLevel.id + ':' + gameConfig.seed
+  );
   const windParticles = initWindParticles(scene);
   function applyPlayerDamage(amount, impactStrength) {
     if (playerSpawnProtected) {
@@ -2216,7 +2222,8 @@ function initGameLoop(
         aiEnabled,
         hudEnabled,
         crosshairEnabled,
-        gameConfig
+        gameConfig,
+        gameConfigWarningText
       );
 
       timer.update();
@@ -2991,7 +2998,8 @@ function initGameLoop(
         aiEnabled,
         hudEnabled,
         crosshairEnabled,
-        gameConfig
+        gameConfig,
+        gameConfigWarningText
       );
       lastUiUpdateTime = currentTime;
     }

@@ -1565,10 +1565,13 @@ function updateOptions(
   aiEnabled = false,
   hudEnabled = true,
   crosshairEnabled = true,
-  gameConfig = null
+  gameConfig = null,
+  gameConfigWarning = ''
 ) {
   var levelEl = document.getElementById('hud-level');
   var seedEl = document.getElementById('hud-seed');
+  var warningRowEl = document.getElementById('hud-warning-row');
+  var warningEl = document.getElementById('hud-warning');
 
   if (levelEl) {
     levelEl.textContent =
@@ -1577,6 +1580,11 @@ function updateOptions(
 
   if (seedEl) {
     seedEl.textContent = gameConfig && gameConfig.seed ? gameConfig.seed : '-';
+  }
+
+  if (warningRowEl && warningEl) {
+    warningEl.textContent = gameConfigWarning || '-';
+    warningRowEl.style.display = gameConfigWarning ? 'block' : 'none';
   }
 
   const cameraEl = document.getElementById('hud-camera');

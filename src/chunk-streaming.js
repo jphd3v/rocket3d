@@ -1527,6 +1527,7 @@ export function createChunkManagerWithTerrain(world, renderer, options = {}) {
     seed = 54321,
     chunkSize = world.chunkSize || CHUNK_SIZE_VOXELS,
     level,
+    cacheSeed,
   } = options;
   // Keep this as the raw authoring config. createTerrainGenerator converts
   // world-unit dimensions into voxel-grid coordinates internally; passing
@@ -1534,9 +1535,14 @@ export function createChunkManagerWithTerrain(world, renderer, options = {}) {
   // twice and make worker chunks disagree with main-thread chunks.
   const terrainWorkerConfig = {
     seed,
+    cacheSeed: cacheSeed != null ? String(cacheSeed) : String(seed),
     chunkSize,
     voxelSize: world.voxelSize,
     levelId: level && level.id ? level.id : 'default-level',
+    decorationSeed:
+      level && level.id
+        ? level.id + ':' + String(cacheSeed != null ? cacheSeed : seed)
+        : String(cacheSeed != null ? cacheSeed : seed),
   };
 
   // Build generator config, optionally with custom level graph

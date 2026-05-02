@@ -1,5 +1,5 @@
 export const level01Current = {
-  id: 'level-01',
+  id: 'level1',
   name: 'Current Test Cavern',
-  seed: 'level-01',
+  seed: 'level1',
 };

@@ -1,9 +1,9 @@
 import { LEVELS, getLevelById } from './levels/index.js';
 import {
   createRandomGameSeed,
+  formatGameConfigWarnings,
   normalizeGameConfig,
   restartGame,
-  shouldClearTerrainCacheFromUrl,
 } from './game-config.js';
 
 function createLevelLabel(level) {
@@ -22,7 +22,10 @@ export function createGameMenu() {
   var seedInput = document.getElementById('menu-seed');
   var previewLevel = document.getElementById('menu-preview-level');
   var previewSeed = document.getElementById('menu-preview-seed');
-  var clearTerrainCacheInput = document.getElementById('menu-clear-terrain-cache');
+  var warning = document.getElementById('game-menu-warning');
+  var clearTerrainCacheInput = document.getElementById(
+    'menu-clear-terrain-cache'
+  );
   var menuForm = document.getElementById('game-menu-form');
   var randomizeButton = document.getElementById('menu-randomize');
   var restartCurrentButton = document.getElementById('menu-restart-current');
@@ -30,6 +33,7 @@ export function createGameMenu() {
   var resumeButton = document.getElementById('menu-resume');
   var mode = 'start';
   var currentConfig = normalizeGameConfig();
+  var currentWarnings = [];
   var resumeHandler = null;
   var i;
 
@@ -79,16 +83,26 @@ export function createGameMenu() {
     updatePreview();
   }
 
-  function showMenu(nextMode, config) {
+  function updateWarning() {
+    var warningText = formatGameConfigWarnings(currentWarnings);
+
+    if (!warning) {
+      return;
+    }
+
+    warning.textContent = warningText;
+    warning.style.display = warningText ? 'block' : 'none';
+  }
+
+  function showMenu(nextMode, config, warnings) {
     mode = nextMode;
+    currentWarnings = Array.isArray(warnings) ? warnings : [];
     currentConfig = {
       ...normalizeGameConfig(config),
-      clearTerrainCache:
-        config && config.clearTerrainCache === true
-          ? true
-          : shouldClearTerrainCacheFromUrl(),
+      clearTerrainCache: config && config.clearTerrainCache === true,
     };
     setFormConfig(currentConfig);
+    updateWarning();
 
     if (mode === 'pause') {
       title.textContent = 'Paused';
@@ -143,11 +157,11 @@ export function createGameMenu() {
   closeMenu();
 
   return {
-    showStartMenu: function (config) {
-      showMenu('start', config);
+    showStartMenu: function (config, warnings) {
+      showMenu('start', config, warnings);
     },
-    openPauseMenu: function (config) {
-      showMenu('pause', config);
+    openPauseMenu: function (config, warnings) {
+      showMenu('pause', config, warnings);
     },
     close: closeMenu,
     isOpen: function () {

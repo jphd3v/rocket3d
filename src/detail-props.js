@@ -223,6 +223,22 @@ function voxelKey(x, y, z) {
   return `${x},${y},${z}`;
 }
 
+function getDecorationSeedRoot(terrainGenerator) {
+  if (!terrainGenerator || !terrainGenerator.config) {
+    return 'default-decoration-seed';
+  }
+
+  return terrainGenerator.config.decorationSeed || 'default-decoration-seed';
+}
+
+function getDecorSeedKey(decorationSeedRoot, localSeedKey) {
+  return decorationSeedRoot + ':' + localSeedKey;
+}
+
+function getDecorHash(decorationSeedRoot, localSeedKey) {
+  return hashString(getDecorSeedKey(decorationSeedRoot, localSeedKey));
+}
+
 function getDetailRuntime(world) {
   if (!world) {
     return null;
@@ -2694,6 +2710,7 @@ function addBuiltInMossVines(
     return chamber.biomeId === activeBiomeId;
   });
   const connectionsByChamber = buildChamberConnectionMap(graph);
+  const decorationSeedRoot = getDecorationSeedRoot(terrainGenerator);
 
   for (const chamber of eligibleChambers) {
     const baseScale = clamp(
@@ -2721,20 +2738,32 @@ function addBuiltInMossVines(
       for (let j = 0; j < entranceOffsets.length; j++) {
         const sideOffset =
           entranceOffsets[j] +
-          (hashString(`${chamber.id}:vine-tunnel-side:${i}:${j}`) - 0.5) * 0.08;
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:vine-tunnel-side:${i}:${j}`
+          ) -
+            0.5) *
+            0.08;
 
         placements.push({
           angle: connection.angle + sideOffset,
           radial:
             radialBase +
-            hashString(`${chamber.id}:vine-tunnel-radial:${i}:${j}`) * 0.12,
+            getDecorHash(
+              decorationSeedRoot,
+              `${chamber.id}:vine-tunnel-radial:${i}:${j}`
+            ) *
+              0.12,
           scaleX: 0.94,
           scaleY: 0.96,
           scaleZ: 0.94,
           scaleBoost: 1.08 + (connection.isMainRoute ? 0.2 : 0.08),
           tunnelBias: connection.isMainRoute ? 3.2 : 2.2,
           edgeBias: 0.85,
-          seedKey: `${chamber.id}:vine-tunnel:${i}:${j}`,
+          seedKey: getDecorSeedKey(
+            decorationSeedRoot,
+            `${chamber.id}:vine-tunnel:${i}:${j}`
+          ),
         });
       }
 
@@ -2742,18 +2771,29 @@ function addBuiltInMossVines(
         placements.push({
           angle:
             connection.angle +
-            (hashString(`${chamber.id}:vine-tunnel-crown-angle:${i}`) - 0.5) *
+            (getDecorHash(
+              decorationSeedRoot,
+              `${chamber.id}:vine-tunnel-crown-angle:${i}`
+            ) -
+              0.5) *
               0.18,
           radial:
             0.88 +
-            hashString(`${chamber.id}:vine-tunnel-crown-radial:${i}`) * 0.08,
+            getDecorHash(
+              decorationSeedRoot,
+              `${chamber.id}:vine-tunnel-crown-radial:${i}`
+            ) *
+              0.08,
           scaleX: 0.98,
           scaleY: 1.02,
           scaleZ: 0.98,
           scaleBoost: 1.18,
           tunnelBias: 3.8,
           edgeBias: 1.15,
-          seedKey: `${chamber.id}:vine-tunnel-crown:${i}`,
+          seedKey: getDecorSeedKey(
+            decorationSeedRoot,
+            `${chamber.id}:vine-tunnel-crown:${i}`
+          ),
         });
       }
     }
@@ -2842,40 +2882,64 @@ function addBuiltInMossCacti(
     return chamber.biomeId === activeBiomeId;
   });
   const connectionsByChamber = buildChamberConnectionMap(graph);
+  const decorationSeedRoot = getDecorationSeedRoot(terrainGenerator);
 
   for (const chamber of eligibleChambers) {
     const sizeFactor = getChamberSizeFactor(chamber);
     const centralAreaCount =
       (chamber.id === 'spawn' ? 3 : 4) +
       Math.floor(sizeFactor * 3) +
-      Math.floor(hashString(`${chamber.id}:cactus-central-count`) * 3);
+      Math.floor(
+        getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-central-count`) *
+          3
+      );
     const midAreaCount =
       4 +
       Math.floor(sizeFactor * 3) +
-      Math.floor(hashString(`${chamber.id}:cactus-mid-count`) * 3);
+      Math.floor(
+        getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-mid-count`) * 3
+      );
     const outerAreaCount =
       1 +
       Math.floor(sizeFactor * 2) +
-      Math.floor(hashString(`${chamber.id}:cactus-outer-count`) * 2);
+      Math.floor(
+        getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-outer-count`) * 2
+      );
     const connections = connectionsByChamber.get(chamber.id) || [];
     const placements = [];
     const candidatePlacements = [];
-    const innerBaseAngle = hashString(`${chamber.id}:cactus-inner-base`) * TAU;
-    const midBaseAngle = hashString(`${chamber.id}:cactus-mid-base`) * TAU;
-    const outerBaseAngle = hashString(`${chamber.id}:cactus-outer-base`) * TAU;
+    const innerBaseAngle =
+      getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-inner-base`) * TAU;
+    const midBaseAngle =
+      getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-mid-base`) * TAU;
+    const outerBaseAngle =
+      getDecorHash(decorationSeedRoot, `${chamber.id}:cactus-outer-base`) * TAU;
 
     for (let i = 0; i < centralAreaCount; i++) {
       placements.push({
         angle:
           innerBaseAngle +
           (i / centralAreaCount) * TAU +
-          (hashString(`${chamber.id}:cactus-central-jitter:${i}`) - 0.5) * 0.52,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-central-jitter:${i}`
+          ) -
+            0.5) *
+            0.52,
         radial:
-          0.1 + hashString(`${chamber.id}:cactus-central-radial:${i}`) * 0.14,
+          0.1 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-central-radial:${i}`
+          ) *
+            0.14,
         widthScale: 0.98,
         heightScale: 1.0,
         areaBias: 1.35,
-        seedKey: `${chamber.id}:cactus-central:${i}`,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:cactus-central:${i}`
+        ),
       });
     }
 
@@ -2884,13 +2948,26 @@ function addBuiltInMossCacti(
         angle:
           midBaseAngle +
           (i / midAreaCount) * TAU +
-          (hashString(`${chamber.id}:cactus-mid-jitter:${i}`) - 0.5) * 0.42,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-mid-jitter:${i}`
+          ) -
+            0.5) *
+            0.42,
         radial:
-          0.22 + hashString(`${chamber.id}:cactus-mid-radial:${i}`) * 0.16,
+          0.22 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-mid-radial:${i}`
+          ) *
+            0.16,
         widthScale: 1.0,
         heightScale: 1.08,
         areaBias: 1.55,
-        seedKey: `${chamber.id}:cactus-mid:${i}`,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:cactus-mid:${i}`
+        ),
       });
     }
 
@@ -2899,13 +2976,26 @@ function addBuiltInMossCacti(
         angle:
           outerBaseAngle +
           (i / outerAreaCount) * TAU +
-          (hashString(`${chamber.id}:cactus-outer-jitter:${i}`) - 0.5) * 0.38,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-outer-jitter:${i}`
+          ) -
+            0.5) *
+            0.38,
         radial:
-          0.38 + hashString(`${chamber.id}:cactus-outer-radial:${i}`) * 0.14,
+          0.38 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-outer-radial:${i}`
+          ) *
+            0.14,
         widthScale: 1.0,
         heightScale: 1.08,
         areaBias: 0.1,
-        seedKey: `${chamber.id}:cactus-outer:${i}`,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:cactus-outer:${i}`
+        ),
       });
     }
 
@@ -2913,7 +3003,10 @@ function addBuiltInMossCacti(
       const connection = connections[i];
       const shouldPlaceEntranceCluster =
         connection.isMainRoute ||
-        hashString(`${chamber.id}:cactus-tunnel-enabled:${i}`) > 0.7;
+        getDecorHash(
+          decorationSeedRoot,
+          `${chamber.id}:cactus-tunnel-enabled:${i}`
+        ) > 0.7;
 
       if (!shouldPlaceEntranceCluster) {
         continue;
@@ -2922,13 +3015,26 @@ function addBuiltInMossCacti(
       placements.push({
         angle:
           connection.angle +
-          (hashString(`${chamber.id}:cactus-tunnel-angle:${i}`) - 0.5) * 0.28,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-tunnel-angle:${i}`
+          ) -
+            0.5) *
+            0.28,
         radial:
-          0.24 + hashString(`${chamber.id}:cactus-tunnel-radial:${i}`) * 0.1,
+          0.24 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:cactus-tunnel-radial:${i}`
+          ) *
+            0.1,
         widthScale: 1.02,
         heightScale: 1.14,
         areaBias: -0.2,
-        seedKey: `${chamber.id}:cactus-tunnel:${i}`,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:cactus-tunnel:${i}`
+        ),
       });
     }
 
@@ -3022,19 +3128,26 @@ function addBuiltInRocks(
     return chamber.biomeId === activeBiomeId;
   });
   const connectionsByChamber = buildChamberConnectionMap(graph);
+  const decorationSeedRoot = getDecorationSeedRoot(terrainGenerator);
 
   for (const chamber of eligibleChambers) {
     const sizeFactor = getChamberSizeFactor(chamber);
     const floorCandidateCount =
       6 +
       Math.floor(sizeFactor * 6) +
-      Math.floor(hashString(`${chamber.id}:rock-floor-count`) * 5);
+      Math.floor(
+        getDecorHash(decorationSeedRoot, `${chamber.id}:rock-floor-count`) * 5
+      );
     const wallCandidateCount =
       1 +
       Math.floor(sizeFactor * 2) +
-      Math.floor(hashString(`${chamber.id}:rock-wall-count`) * 2);
-    const floorBaseAngle = hashString(`${chamber.id}:rock-floor-base`) * TAU;
-    const wallBaseAngle = hashString(`${chamber.id}:rock-wall-base`) * TAU;
+      Math.floor(
+        getDecorHash(decorationSeedRoot, `${chamber.id}:rock-wall-count`) * 2
+      );
+    const floorBaseAngle =
+      getDecorHash(decorationSeedRoot, `${chamber.id}:rock-floor-base`) * TAU;
+    const wallBaseAngle =
+      getDecorHash(decorationSeedRoot, `${chamber.id}:rock-wall-base`) * TAU;
     const connections = connectionsByChamber.get(chamber.id) || [];
     const candidates = [];
 
@@ -3044,15 +3157,31 @@ function addBuiltInRocks(
         angle:
           floorBaseAngle +
           (i / floorCandidateCount) * TAU +
-          (hashString(`${chamber.id}:rock-floor-jitter:${i}`) - 0.5) * 0.46,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-floor-jitter:${i}`
+          ) -
+            0.5) *
+            0.46,
         radial:
-          0.22 + hashString(`${chamber.id}:rock-floor-radial:${i}`) * 0.48,
+          0.22 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-floor-radial:${i}`
+          ) *
+            0.48,
         floorBias: 1.2,
         size:
           0.48 +
-          hashString(`${chamber.id}:rock-floor-size:${i}`) *
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-floor-size:${i}`
+          ) *
             (0.68 + sizeFactor * 0.38),
-        seedKey: `${chamber.id}:rock-floor:${i}`,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:rock-floor:${i}`
+        ),
       });
     }
 
@@ -3062,11 +3191,31 @@ function addBuiltInRocks(
         angle:
           wallBaseAngle +
           (i / wallCandidateCount) * TAU +
-          (hashString(`${chamber.id}:rock-wall-jitter:${i}`) - 0.5) * 0.34,
-        radial: 0.72 + hashString(`${chamber.id}:rock-wall-radial:${i}`) * 0.14,
+          (getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-wall-jitter:${i}`
+          ) -
+            0.5) *
+            0.34,
+        radial:
+          0.72 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-wall-radial:${i}`
+          ) *
+            0.14,
         wallBias: 0.9,
-        size: 0.44 + hashString(`${chamber.id}:rock-wall-size:${i}`) * 0.24,
-        seedKey: `${chamber.id}:rock-wall:${i}`,
+        size:
+          0.44 +
+          getDecorHash(
+            decorationSeedRoot,
+            `${chamber.id}:rock-wall-size:${i}`
+          ) *
+            0.24,
+        seedKey: getDecorSeedKey(
+          decorationSeedRoot,
+          `${chamber.id}:rock-wall:${i}`
+        ),
       });
     }
 

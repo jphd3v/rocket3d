@@ -9,6 +9,7 @@ class LoadingManager {
     this.loadingCacheStatus = document.getElementById('loading-cache-status');
     this.loadingLevel = document.getElementById('loading-level');
     this.loadingSeed = document.getElementById('loading-seed');
+    this.loadingWarning = document.getElementById('loading-warning');
     this.loadingScreen = document.getElementById('loading-screen');
     this.totalChunksToLoad = 0;
     this.loadedChunks = 0;
@@ -19,6 +20,7 @@ class LoadingManager {
     this.manualProgress = null;
     this.terrainCacheLookups = 0;
     this.terrainCachePersistentHits = 0;
+    this.terrainCacheClearRequested = false;
 
     if (this.loadingDetails) {
       this.loadingDetails.textContent = 'Initializing...';
@@ -35,6 +37,20 @@ class LoadingManager {
     if (this.loadingSeed) {
       this.loadingSeed.textContent = config && config.seed ? config.seed : '-';
     }
+  }
+
+  setWarning(message) {
+    if (!this.loadingWarning) {
+      return;
+    }
+
+    this.loadingWarning.textContent = message || '';
+    this.loadingWarning.style.display = message ? 'block' : 'none';
+  }
+
+  setTerrainCacheClearRequested(requested) {
+    this.terrainCacheClearRequested = requested === true;
+    this.updateCacheStatus();
   }
 
   setManualProgress(percent, details) {
@@ -64,6 +80,12 @@ class LoadingManager {
 
   updateCacheStatus() {
     if (!this.loadingCacheStatus) {
+      return;
+    }
+
+    if (this.terrainCacheClearRequested) {
+      this.loadingCacheStatus.textContent = '[clearing browser terrain cache]';
+      this.loadingCacheStatus.style.visibility = 'visible';
       return;
     }
 

@@ -31,8 +31,9 @@ import {
   STARTUP_WARMUP_BUDGET_MS,
   STARTUP_WARMUP_RADIUS,
   STREAM_LOAD_RADIUS,
-  getGameConfigFromUrl,
+  formatGameConfigWarnings,
   hasExplicitGameConfigInUrl,
+  parseGameConfigFromUrl,
 } from './game-config.js';
 import { getActiveLevel } from './levels/index.js';
 import {
@@ -145,23 +146,33 @@ function getStartupDirection(activeLevel) {
 async function main() {
   try {
     var gameMenu = createGameMenu();
-    var gameConfig = getGameConfigFromUrl();
+    var parsedGameConfig = parseGameConfigFromUrl();
+    var gameConfig = parsedGameConfig.config;
+    var gameConfigWarnings = parsedGameConfig.warnings;
+    var gameConfigWarningText = formatGameConfigWarnings(gameConfigWarnings);
+    var runtimeGameConfig = {
+      ...gameConfig,
+      warnings: gameConfigWarnings,
+    };
     var hasExplicitConfig = hasExplicitGameConfigInUrl();
+    const loadingManager = new LoadingManager();
+
+    if (hasExplicitConfig) {
+      loadingManager.setGameConfig(gameConfig);
+    }
+    loadingManager.setWarning(gameConfigWarningText);
+    loadingManager.setTerrainCacheClearRequested(
+      parsedGameConfig.clearTerrainCache
+    );
 
     await clearTerrainCacheFromUrl();
 
     if (!hasExplicitConfig) {
-      var loadingScreen = document.getElementById('loading-screen');
-      if (loadingScreen) {
-        loadingScreen.style.display = 'none';
-      }
-      gameMenu.showStartMenu(DEFAULT_GAME_CONFIG);
+      loadingManager.hideLoadingScreen();
+      gameMenu.showStartMenu(DEFAULT_GAME_CONFIG, gameConfigWarnings);
       return;
     }
 
-    // Initialize loading manager
-    const loadingManager = new LoadingManager();
-    loadingManager.setGameConfig(gameConfig);
     const soundtrack = createSoundtrackController({
       tracks: soundtrackTracks,
       volume: SOUNDTRACK_VOLUME,
@@ -237,6 +248,7 @@ async function main() {
       { scene },
       {
         seed: levelSeedNumber,
+        cacheSeed: gameConfig.seed,
         showChunkBoundaries: false, // Disable chunk boundary visualization for better performance
         loadRadius: STREAM_LOAD_RADIUS,
         unloadRadius: STREAM_LOAD_RADIUS + 1,
@@ -486,7 +498,7 @@ async function main() {
         toggleFullscreen();
       },
       activeLevel,
-      gameConfig,
+      runtimeGameConfig,
       gameMenu
     );
 

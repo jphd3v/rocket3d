@@ -151,6 +151,16 @@ function normalizeSeed(seed) {
   return String(seed == null ? 'default' : seed);
 }
 
+function getConfigCacheSeed(config) {
+  return normalizeSeed(
+    config && config.cacheSeed != null
+      ? config.cacheSeed
+      : config
+        ? config.seed
+        : null
+  );
+}
+
 function normalizeLevelId(config) {
   return String((config && config.levelId) || 'default-level');
 }
@@ -168,7 +178,7 @@ function buildCommonKeyParts(config) {
     CACHE_PREFIX,
     TERRAIN_CACHE_VERSION,
     normalizeLevelId(config),
-    'seed-' + normalizeSeed(config ? config.seed : null),
+    'seed-' + getConfigCacheSeed(config),
   ];
 }
 
@@ -197,7 +207,7 @@ function hasExpectedMetadata(record, config, lodLevel) {
     metadata &&
     metadata.schemaVersion === 1 &&
     metadata.levelId === normalizeLevelId(config) &&
-    metadata.seed === normalizeSeed(config ? config.seed : null) &&
+    metadata.seed === getConfigCacheSeed(config) &&
     metadata.terrainVersion === TERRAIN_CACHE_VERSION &&
     metadata.meshVersion === MESHER_CACHE_VERSION &&
     metadata.colorVersion === COLOR_CACHE_VERSION &&
@@ -539,7 +549,7 @@ export function storeChunkBundleInTerrainCache(
     metadata: {
       schemaVersion: 1,
       levelId: normalizeLevelId(config),
-      seed: normalizeSeed(config ? config.seed : null),
+      seed: getConfigCacheSeed(config),
       lodLevel: 0,
       chunkKey: chunkX + ',' + chunkY + ',' + chunkZ,
       chunkSize: getConfigChunkSize(config),
@@ -608,7 +618,7 @@ export function storeLodGeometryInTerrainCache(
     metadata: {
       schemaVersion: 1,
       levelId: normalizeLevelId(config),
-      seed: normalizeSeed(config ? config.seed : null),
+      seed: getConfigCacheSeed(config),
       lodLevel: geoOptions && geoOptions.blockSize ? geoOptions.blockSize : 1,
       chunkKey: String(lodKey),
       chunkSize: getConfigChunkSize(config),

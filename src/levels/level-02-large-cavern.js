@@ -145,9 +145,9 @@ function buildSkyOpenings() {
 }
 
 export var level02LargeCavern = {
-  id: 'level-02',
+  id: 'level2',
   name: 'Large Cavern',
-  seed: 'level-02',
+  seed: 'level2',
   startingChamber: {
     center: { x: SPAWN.x, y: SPAWN.y, z: SPAWN.z },
     radius: { x: 56, y: 32, z: 56 },
