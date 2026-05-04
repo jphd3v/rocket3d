@@ -1,3 +1,13 @@
+import {
+  BUTTON,
+  AXIS,
+  buttonValue,
+  buttonPressed,
+  applyDeadzone,
+  getConnectedGamepad,
+  getGamepadProfile,
+} from './gamepad.js';
+
 const ONE_SHOT_INPUT_KEYS = [
   'cycleWeapon',
   'toggleBoundaries',
@@ -8,6 +18,7 @@ const ONE_SHOT_INPUT_KEYS = [
   'toggleFullscreen',
   'cameraReset',
   'cyclePerspective',
+  'cyclePerspectivePrev',
   'toggleHud',
   'toggleHelp',
   'toggleCrosshair',
@@ -40,8 +51,13 @@ function createEmptyInputs() {
     toggleFullscreen: 0,
     cameraZoomIn: 0,
     cameraZoomOut: 0,
+    cameraOrbitLeft: 0,
+    cameraOrbitRight: 0,
+    cameraHeightUp: 0,
+    cameraHeightDown: 0,
     cameraReset: 0,
     cyclePerspective: 0,
+    cyclePerspectivePrev: 0,
     toggleHud: 0,
     toggleHelp: 0,
     toggleCrosshair: 0,
@@ -54,47 +70,8 @@ function createEmptyInputs() {
     toggleLod3: 0,
     toggleLodAll: 0,
     toggleLodDebug: 0,
+    toggleReverseView: 0,
   };
-}
-
-function buttonValue(button) {
-  if (typeof button === 'object' && button) {
-    if (typeof button.value === 'number') {
-      return button.value;
-    }
-
-    return button.pressed ? 1 : 0;
-  }
-
-  return typeof button === 'number' ? button : 0;
-}
-
-function buttonPressed(button) {
-  return buttonValue(button) > 0.5;
-}
-
-function applyDeadzone(value, deadZone = 0.1) {
-  return Math.abs(value) < deadZone ? 0 : value;
-}
-
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
-}
-
-function triggerAxisValue(value) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return 0;
-  }
-
-  if (value >= 0 && value <= 1) {
-    return value;
-  }
-
-  return clamp01((value + 1) * 0.5);
-}
-
-function isStandardGamepad(gamepad) {
-  return gamepad && gamepad.mapping === 'standard';
 }
 
 function isEditableTarget(target) {
@@ -372,129 +349,83 @@ export function initControls(domWindow) {
 }
 
 function pollGamepadInputs() {
-  const gamepads = navigator.getGamepads
-    ? navigator.getGamepads()
-    : navigator.webkitGetGamepads
-      ? navigator.webkitGetGamepads()
-      : [];
-
   const inputs = createEmptyInputs();
-
-  if (
-    !gamepads ||
-    typeof gamepads.length !== 'number' ||
-    gamepads.length <= 0
-  ) {
-    return inputs;
-  }
-
-  let gamepad = null;
-
-  for (let i = 0; i < gamepads.length; i++) {
-    if (gamepads[i]) {
-      gamepad = gamepads[i];
-      break;
-    }
-  }
+  const gamepad = getConnectedGamepad();
 
   if (!gamepad) {
     return inputs;
   }
 
-  const standardGamepad = isStandardGamepad(gamepad);
-  const thrustButtonIndex = standardGamepad ? 7 : -1;
-  const brakeButtonIndex = standardGamepad ? 6 : -1;
-  const cycleWeaponButtonIndex = standardGamepad ? 3 : 4;
-  const fireButtonIndex = standardGamepad ? 5 : 1;
-  const reverseViewButtonIndex = standardGamepad ? -1 : 5;
-  const flightHorizontalAxisIndex = standardGamepad ? 0 : 1;
-  const flightVerticalAxisIndex = standardGamepad ? 1 : 2;
-  const toggleMenuButtonIndex = 10;
-  const forceOptionsButtonIndex = 11;
-  const cameraResetButtonIndex = 14;
-  const thrustButtonValue =
-    thrustButtonIndex >= 0
-      ? buttonValue(gamepad.buttons[thrustButtonIndex])
-      : 0;
-  const brakeButtonValue =
-    brakeButtonIndex >= 0 ? buttonValue(gamepad.buttons[brakeButtonIndex]) : 0;
-
-  inputs.thrust = Math.max(
-    thrustButtonValue,
-    triggerAxisValue(gamepad.axes[5])
-  );
-  inputs.brake = Math.max(brakeButtonValue, triggerAxisValue(gamepad.axes[6]));
-
-  if (buttonPressed(gamepad.buttons[cycleWeaponButtonIndex])) {
-    inputs.cycleWeapon = 1;
+  if (getGamepadProfile(gamepad) !== 'standard') {
+    return inputs;
   }
 
-  if (buttonPressed(gamepad.buttons[fireButtonIndex])) {
+  inputs.thrust = buttonValue(gamepad.buttons[BUTTON.RT]);
+  inputs.brake = buttonValue(gamepad.buttons[BUTTON.LT]);
+
+  if (buttonPressed(gamepad.buttons[BUTTON.A])) {
     inputs.fire = 1;
   }
 
-  if (
-    reverseViewButtonIndex >= 0 &&
-    buttonPressed(gamepad.buttons[reverseViewButtonIndex])
-  ) {
-    inputs.toggleReverseView = 1;
+  if (buttonPressed(gamepad.buttons[BUTTON.X])) {
+    inputs.cycleWeapon = 1;
   }
 
-  const leftStickHorizontal = applyDeadzone(
-    gamepad.axes[flightHorizontalAxisIndex] || 0
-  );
-  const leftStickVertical = applyDeadzone(
-    gamepad.axes[flightVerticalAxisIndex] || 0
-  );
+  const leftX = applyDeadzone(gamepad.axes[AXIS.LeftX] || 0);
+  const leftY = applyDeadzone(gamepad.axes[AXIS.LeftY] || 0);
 
-  if (leftStickHorizontal > 0) {
-    inputs.rollRight = leftStickHorizontal;
-  } else if (leftStickHorizontal < 0) {
-    inputs.rollLeft = Math.abs(leftStickHorizontal);
+  if (leftX > 0) {
+    inputs.rollRight = leftX;
+  } else if (leftX < 0) {
+    inputs.rollLeft = Math.abs(leftX);
   }
 
-  if (leftStickVertical > 0) {
-    inputs.pitchUp = leftStickVertical;
-  } else if (leftStickVertical < 0) {
-    inputs.pitchDown = Math.abs(leftStickVertical);
+  if (leftY > 0) {
+    inputs.pitchUp = leftY;
+  } else if (leftY < 0) {
+    inputs.pitchDown = Math.abs(leftY);
   }
 
-  const rightStickHorizontalIndex =
-    gamepad.mapping === 'standard' || gamepad.axes.length < 5 ? 2 : 3;
-  const rightStickVerticalIndex =
-    gamepad.mapping === 'standard' || gamepad.axes.length < 5 ? 3 : 4;
-  const rightStickHorizontal = applyDeadzone(
-    gamepad.axes[rightStickHorizontalIndex] || 0
-  );
-  const rightStickVertical = applyDeadzone(
-    gamepad.axes[rightStickVerticalIndex] || 0
-  );
+  const rightX = applyDeadzone(gamepad.axes[AXIS.RightX] || 0);
+  const rightY = applyDeadzone(gamepad.axes[AXIS.RightY] || 0);
 
-  if (rightStickVertical > 0) {
-    inputs.cameraHeightDown = rightStickVertical;
-  } else if (rightStickVertical < 0) {
-    inputs.cameraHeightUp = Math.abs(rightStickVertical);
+  if (rightY > 0) {
+    inputs.cameraHeightDown = rightY;
+  } else if (rightY < 0) {
+    inputs.cameraHeightUp = Math.abs(rightY);
   }
 
-  if (rightStickHorizontal > 0) {
-    inputs.cameraOrbitRight = rightStickHorizontal;
-  } else if (rightStickHorizontal < 0) {
-    inputs.cameraOrbitLeft = Math.abs(rightStickHorizontal);
+  if (rightX > 0) {
+    inputs.cameraOrbitRight = rightX;
+  } else if (rightX < 0) {
+    inputs.cameraOrbitLeft = Math.abs(rightX);
   }
 
-  if (buttonPressed(gamepad.buttons[13])) {
+  if (buttonPressed(gamepad.buttons[BUTTON.DPadLeft])) {
+    inputs.cyclePerspectivePrev = 1;
+  }
+
+  if (buttonPressed(gamepad.buttons[BUTTON.DPadRight])) {
     inputs.cyclePerspective = 1;
   }
 
-  if (buttonPressed(gamepad.buttons[toggleMenuButtonIndex])) {
-    inputs.toggleMenu = 1;
-  }
-
-  if (buttonPressed(gamepad.buttons[forceOptionsButtonIndex])) {
+  if (buttonPressed(gamepad.buttons[BUTTON.Start])) {
     inputs.forceOptions = 1;
   }
 
-  if (buttonPressed(gamepad.buttons[cameraResetButtonIndex])) {
+  if (buttonPressed(gamepad.buttons[BUTTON.Back])) {
+    inputs.toggleMenu = 1;
+  }
+
+  if (buttonValue(gamepad.buttons[BUTTON.DPadDown]) || buttonValue(gamepad.buttons[BUTTON.LB])) {
+    inputs.toggleReverseView = 1;
+  }
+
+  if (buttonPressed(gamepad.buttons[BUTTON.DPadUp])) {
+    inputs.cameraReset = 1;
+  }
+
+  if (buttonPressed(gamepad.buttons[BUTTON.RightStick])) {
     inputs.cameraReset = 1;
   }
 

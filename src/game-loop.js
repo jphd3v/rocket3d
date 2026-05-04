@@ -2807,7 +2807,8 @@ function initGameLoop(
       ) {
         camera.lookAt(observerFocusPoint);
       } else {
-        chaseLookDirection.set(0, 1.2, 20);
+        var chaseLookZ = cameraState.isReversed ? -200 : 20;
+        chaseLookDirection.set(0, 1.2, chaseLookZ);
         if (cameraState.currentPerspective === PERSPECTIVE_THIRD_PERSON) {
           chaseLookDirection.applyQuaternion(cameraChaseQuaternion);
         } else {

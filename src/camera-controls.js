@@ -99,6 +99,8 @@ function updateCameraState(inputs, cameraState) {
   // Handle perspective switching
   if (inputs.cyclePerspective) {
     cycleToNextPerspective(cameraState);
+  } else if (inputs.cyclePerspectivePrev) {
+    cycleToPrevPerspective(cameraState);
   } else {
     if (inputs.perspectiveFirst) {
       switchPerspective(cameraState, PERSPECTIVE_FIRST_PERSON);
@@ -111,8 +113,11 @@ function updateCameraState(inputs, cameraState) {
     }
   }
 
-  // Handle reverse view (only in first-person) - requires holding button
-  if (cameraState.currentPerspective === PERSPECTIVE_FIRST_PERSON) {
+  // Handle reverse view (first-person and third-person) - requires holding button
+  if (
+    cameraState.currentPerspective === PERSPECTIVE_FIRST_PERSON ||
+    cameraState.currentPerspective === PERSPECTIVE_THIRD_PERSON
+  ) {
     cameraState.isReversed = inputs.toggleReverseView === 1;
   } else {
     cameraState.isReversed = false;
@@ -154,6 +159,21 @@ function cycleToNextPerspective(cameraState) {
  * @param {Object} cameraState - Current camera state
  * @param {string} targetPerspective - Target perspective constant
  */
+function cycleToPrevPerspective(cameraState) {
+  const perspectives = [
+    PERSPECTIVE_FIRST_PERSON,
+    PERSPECTIVE_THIRD_PERSON,
+    PERSPECTIVE_OBSERVER,
+  ];
+
+  const currentIndex = perspectives.indexOf(cameraState.currentPerspective);
+  const prevIndex =
+    (currentIndex - 1 + perspectives.length) % perspectives.length;
+  const prevPerspective = perspectives[prevIndex];
+
+  switchPerspective(cameraState, prevPerspective);
+}
+
 function switchPerspective(
   cameraState,
   targetPerspective,
@@ -297,9 +317,9 @@ function calculateCameraPosition(cameraState) {
   } else {
     // Third-person and observer modes use offset vectors, with negative Z
     // staying behind the rocket.
-    const x = cameraState.distance * Math.sin(cameraState.horizontalAngle);
-    const z = -cameraState.distance * Math.cos(cameraState.horizontalAngle);
-    const y = cameraState.heightOffset;
+    x = cameraState.distance * Math.sin(cameraState.horizontalAngle);
+    z = -cameraState.distance * Math.cos(cameraState.horizontalAngle);
+    y = cameraState.heightOffset;
 
     return new THREE.Vector3(x, y, z);
   }

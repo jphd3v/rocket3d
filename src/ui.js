@@ -3,6 +3,7 @@ import Stats from 'stats.js';
 import { PERSPECTIVE_OBSERVER } from './camera-controls.js';
 import { transformRocketLocalPoint } from './rocket-orientation.js';
 import { ROCKET_TARGET_ANCHOR } from './rocket-voxels.js';
+import { getConnectedGamepad, getGamepadProfile } from './gamepad.js';
 
 const MIN_BRACKET_SIZE = 32;
 const MAX_BRACKET_SIZE = 117;
@@ -1734,6 +1735,19 @@ function updateOptions(
     );
   } else if (boundariesRow) {
     boundariesRow.style.display = 'none';
+  }
+
+  var gamepadEl = document.getElementById('hud-gamepad');
+
+  if (gamepadEl) {
+    var gp = getConnectedGamepad();
+
+    if (gp) {
+      gamepadEl.innerHTML =
+        getGamepadProfile(gp) + '<br>' + (gp.id || 'unknown');
+    } else {
+      gamepadEl.textContent = 'none';
+    }
   }
 }
 

@@ -4,6 +4,11 @@ import {
   normalizeGameConfig,
   restartGame,
 } from './game-config.js';
+import {
+  getConnectedGamepad,
+  getGamepadProfile,
+  readStandardGamepad,
+} from './gamepad.js';
 
 function formatLevelId(levelId) {
   var match = String(levelId || '').match(/^level(\d+)$/i);
@@ -40,26 +45,6 @@ function formatPassiveSeedMarkup(levelId, seed) {
     normalizedSeed +
     '</span>'
   );
-}
-
-function buttonPressed(button) {
-  if (!button) {
-    return false;
-  }
-
-  if (typeof button === 'object') {
-    return button.pressed || button.value > 0.5;
-  }
-
-  return button > 0.5;
-}
-
-function axisPressed(value, direction) {
-  if (typeof value !== 'number') {
-    return false;
-  }
-
-  return direction < 0 ? value < -0.55 : value > 0.55;
 }
 
 export function createGameMenu() {
@@ -670,21 +655,9 @@ export function createGameMenu() {
   }
 
   function readGamepadMenuState() {
-    var gamepads = navigator.getGamepads
-      ? navigator.getGamepads()
-      : navigator.webkitGetGamepads
-        ? navigator.webkitGetGamepads()
-        : [];
-    var gamepad = null;
+    var gamepad = getConnectedGamepad();
 
-    for (var i = 0; gamepads && i < gamepads.length; i++) {
-      if (gamepads[i]) {
-        gamepad = gamepads[i];
-        break;
-      }
-    }
-
-    if (!gamepad) {
+    if (!gamepad || getGamepadProfile(gamepad) !== 'standard') {
       return {
         up: false,
         down: false,
@@ -695,17 +668,15 @@ export function createGameMenu() {
       };
     }
 
+    var s = readStandardGamepad(gamepad);
+
     return {
-      up:
-        buttonPressed(gamepad.buttons[12]) || axisPressed(gamepad.axes[1], -1),
-      down:
-        buttonPressed(gamepad.buttons[13]) || axisPressed(gamepad.axes[1], 1),
-      left:
-        buttonPressed(gamepad.buttons[14]) || axisPressed(gamepad.axes[0], -1),
-      right:
-        buttonPressed(gamepad.buttons[15]) || axisPressed(gamepad.axes[0], 1),
-      select: buttonPressed(gamepad.buttons[0]),
-      back: buttonPressed(gamepad.buttons[1]),
+      up: s.up,
+      down: s.down,
+      left: s.left,
+      right: s.right,
+      select: s.confirm,
+      back: s.back,
     };
   }
 
