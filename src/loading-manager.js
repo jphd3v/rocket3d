@@ -3,7 +3,10 @@ import { debugError } from './debug.js';
 
 class LoadingManager {
   constructor() {
+    this.progressSegmentCount = 24;
     this.progressBar = document.getElementById('progress-bar');
+    this.progressFill = document.getElementById('progress-fill');
+    this.progressSegments = [];
     this.progressText = document.getElementById('progress-text');
     this.loadingDetails = document.getElementById('loading-details');
     this.loadingCacheStatus = document.getElementById('loading-cache-status');
@@ -25,7 +28,44 @@ class LoadingManager {
     if (this.loadingDetails) {
       this.loadingDetails.textContent = 'Initializing...';
     }
+    this.setupProgressSegments();
     this.updateCacheStatus();
+  }
+
+  setupProgressSegments() {
+    if (!this.progressFill) {
+      debugError('Progress fill element not found!');
+      return;
+    }
+
+    this.progressFill.innerHTML = '';
+    this.progressSegments = [];
+
+    for (let i = 0; i < this.progressSegmentCount; i += 1) {
+      const segment = document.createElement('span');
+      segment.className = 'progress-segment';
+      this.progressFill.appendChild(segment);
+      this.progressSegments.push(segment);
+    }
+  }
+
+  setProgressFill(percent) {
+    if (!this.progressSegments || this.progressSegments.length === 0) {
+      debugError('Progress segments not initialized!');
+      return;
+    }
+
+    var clampedPercent = Math.max(0, Math.min(100, percent));
+    var activeSegments = Math.round(
+      (clampedPercent / 100) * this.progressSegmentCount
+    );
+
+    for (let i = 0; i < this.progressSegments.length; i += 1) {
+      this.progressSegments[i].classList.toggle(
+        'is-active',
+        i < activeSegments
+      );
+    }
   }
 
   setGameConfig(config) {
@@ -35,7 +75,8 @@ class LoadingManager {
     }
 
     if (this.loadingSeed) {
-      this.loadingSeed.textContent = config && config.seed ? config.seed : '-';
+      this.loadingSeed.textContent =
+        'seed ' + (config && config.seed ? config.seed : '-');
     }
   }
 
@@ -84,7 +125,9 @@ class LoadingManager {
     }
 
     if (this.terrainCacheClearRequested) {
-      this.loadingCacheStatus.textContent = '[clearing browser terrain cache]';
+      this.loadingCacheStatus.textContent = 'CLEARING CACHE';
+      this.loadingCacheStatus.classList.remove('is-cache-hit');
+      this.loadingCacheStatus.classList.add('is-cache-clear');
       this.loadingCacheStatus.style.visibility = 'visible';
       return;
     }
@@ -93,11 +136,14 @@ class LoadingManager {
       this.terrainCacheLookups > 0 &&
       this.terrainCacheLookups === this.terrainCachePersistentHits
     ) {
-      this.loadingCacheStatus.textContent =
-        'loading from browser terrain cache';
+      this.loadingCacheStatus.textContent = 'TERRAIN CACHE READY';
+      this.loadingCacheStatus.classList.add('is-cache-hit');
+      this.loadingCacheStatus.classList.remove('is-cache-clear');
       this.loadingCacheStatus.style.visibility = 'visible';
     } else {
       this.loadingCacheStatus.textContent = '';
+      this.loadingCacheStatus.classList.remove('is-cache-hit');
+      this.loadingCacheStatus.classList.remove('is-cache-clear');
       this.loadingCacheStatus.style.visibility = 'hidden';
     }
   }
@@ -139,11 +185,7 @@ class LoadingManager {
 
   updateProgress() {
     if (this.manualProgress) {
-      if (this.progressBar) {
-        this.progressBar.style.width = `${this.manualProgress.percent}%`;
-      } else {
-        debugError('Progress bar element not found!');
-      }
+      this.setProgressFill(this.manualProgress.percent);
 
       if (this.progressText) {
         this.progressText.textContent = `${Math.floor(
@@ -196,11 +238,7 @@ class LoadingManager {
     const totalProgress = Math.min(100, loadingProgress + meshingProgress);
 
     // Force DOM updates - ensure progress bar elements exist
-    if (this.progressBar) {
-      this.progressBar.style.width = `${totalProgress}%`;
-    } else {
-      debugError('Progress bar element not found!');
-    }
+    this.setProgressFill(totalProgress);
 
     if (this.progressText) {
       this.progressText.textContent = `${Math.floor(totalProgress)}%`;

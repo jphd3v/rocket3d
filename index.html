@@ -10,817 +10,233 @@
       name="viewport"
       content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
     />
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        border: 0;
-        overflow: hidden;
-        background-color: #000;
-      }
-      #c {
-        width: 100vw;
-        height: 100vh;
-        display: block;
-      }
-
-      #vignette {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        background: radial-gradient(
-          ellipse at center,
-          transparent 50%,
-          rgba(0, 0, 0, 0.35) 100%
-        );
-        z-index: 50;
-      }
-
-      /* UI Overlay Layer - pointer-events: none so clicks pass through to game */
-      #ui-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 100;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        color: #cccccc;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-      }
-
-      /* Game Health - minimal bottom-left display */
-      #game-health {
-        position: absolute;
-        bottom: 14px;
-        left: 14px;
-        font-family: 'Courier New', monospace;
-        font-size: 15px;
-        font-weight: bold;
-        letter-spacing: 0.05em;
-        opacity: 0.55;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-        pointer-events: none;
-        display: block;
-      }
-
-      .game-health-good {
-        color: #44ee66;
-      }
-      .game-health-warning {
-        color: #eecc44;
-      }
-      .game-health-danger {
-        color: #ee4444;
-      }
-
-      /* Stats Panel - bottom left (hidden in game mode) */
-      #stats-panel {
-        display: none;
-        position: absolute;
-        bottom: 10px;
-        left: 10px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        background: rgba(10, 18, 16, 0.6);
-        border: 1px solid rgba(185, 255, 220, 0.12);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(4px);
-        font-size: 11px;
-        line-height: 1.35;
-        color: #e0eee8;
-      }
-
-      /* Options Panel - top right (hidden in game mode) */
-      #options-panel {
-        display: none;
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        padding: 8px 10px;
-        border-radius: 8px;
-        background: rgba(10, 18, 16, 0.6);
-        border: 1px solid rgba(185, 255, 220, 0.12);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(4px);
-        min-width: 240px;
-        text-align: right;
-        font-size: 11px;
-        line-height: 1.35;
-        color: #e0eee8;
-      }
-
-      /* HUD - central reticle/spatial locator */
-      #hud {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        display: none;
-      }
-
-      /* Menus Layer - visible only when paused, captures pointer events */
-      #menus {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: auto;
-        z-index: 200;
-        display: none;
-      }
-
-      #game-menu-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: auto;
-        z-index: 210;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        box-sizing: border-box;
-        background: rgba(4, 7, 7, 0.72);
-        backdrop-filter: blur(8px);
-      }
-
-      .game-menu-card {
-        width: min(460px, calc(100vw - 32px));
-        padding: 24px;
-        border-radius: 14px;
-        border: 1px solid rgba(170, 240, 220, 0.18);
-        background: linear-gradient(
-          180deg,
-          rgba(12, 20, 18, 0.96) 0%,
-          rgba(9, 14, 14, 0.94) 100%
-        );
-        box-shadow:
-          0 24px 48px rgba(0, 0, 0, 0.45),
-          inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-        color: #d8f5ea;
-        font-family: 'Courier New', monospace;
-      }
-
-      .game-menu-kicker {
-        font-size: 12px;
-        letter-spacing: 0.24em;
-        text-transform: uppercase;
-        color: #7fd8bd;
-      }
-
-      .game-menu-title {
-        margin-top: 8px;
-        font-size: 34px;
-        font-weight: bold;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #ffffff;
-      }
-
-      .game-menu-subtitle {
-        margin-top: 8px;
-        color: #95b9ad;
-        font-size: 14px;
-        line-height: 1.5;
-      }
-
-      .game-menu-form {
-        margin-top: 20px;
-      }
-
-      .game-menu-field {
-        display: block;
-        margin-bottom: 14px;
-      }
-
-      .game-menu-field-label {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 12px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: #9bd7c6;
-      }
-
-      .game-menu-input,
-      .game-menu-select {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid rgba(150, 220, 200, 0.18);
-        border-radius: 8px;
-        background: rgba(14, 22, 20, 0.95);
-        color: #eefdf7;
-        padding: 12px 14px;
-        font-family: inherit;
-        font-size: 15px;
-      }
-
-      .game-menu-input:focus,
-      .game-menu-select:focus {
-        outline: none;
-        border-color: rgba(150, 240, 220, 0.45);
-        box-shadow: 0 0 0 3px rgba(90, 170, 150, 0.16);
-      }
-
-      .game-menu-preview {
-        margin-top: 18px;
-        padding: 12px 14px;
-        border-radius: 8px;
-        background: rgba(10, 17, 16, 0.84);
-        border: 1px solid rgba(150, 220, 200, 0.12);
-        font-size: 13px;
-        line-height: 1.6;
-      }
-
-      .game-menu-warning {
-        display: none;
-        margin-top: 14px;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 196, 120, 0.22);
-        background: rgba(58, 34, 10, 0.42);
-        color: #ffd9a0;
-        font-size: 12px;
-        line-height: 1.5;
-      }
-
-      .game-menu-preview span {
-        color: #fff0a8;
-      }
-
-      .game-menu-toggle {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-top: 16px;
-        font-size: 13px;
-        line-height: 1.5;
-        color: #c7eadf;
-        cursor: pointer;
-      }
-
-      .game-menu-toggle input {
-        width: 16px;
-        height: 16px;
-        margin: 0;
-        accent-color: #5fb997;
-      }
-
-      .game-menu-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 18px;
-      }
-
-      .game-menu-button {
-        border: 1px solid rgba(150, 220, 200, 0.2);
-        border-radius: 8px;
-        background: rgba(17, 28, 24, 0.96);
-        color: #e6fff6;
-        padding: 11px 14px;
-        font-family: inherit;
-        font-size: 13px;
-        letter-spacing: 0.04em;
-        cursor: pointer;
-      }
-
-      .game-menu-button:hover {
-        border-color: rgba(170, 240, 220, 0.42);
-        background: rgba(24, 36, 31, 0.98);
-      }
-
-      .game-menu-button-primary {
-        background: linear-gradient(180deg, #285744 0%, #19392f 100%);
-        border-color: rgba(160, 245, 222, 0.3);
-        color: #f8fffc;
-      }
-
-      .game-menu-button-primary:hover {
-        background: linear-gradient(180deg, #32705a 0%, #21473a 100%);
-      }
-
-      @media (max-width: 560px) {
-        .game-menu-card {
-          padding: 18px;
-        }
-
-        .game-menu-title {
-          font-size: 28px;
-        }
-
-        .game-menu-button {
-          width: 100%;
-        }
-      }
-
-      /* Toast Notification */
-      #toast-container {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        max-width: min(620px, calc(100vw - 40px));
-        padding: 8px 16px;
-        border-radius: 6px;
-        background: rgba(10, 18, 16, 0.72);
-        border: 1px solid rgba(140, 220, 200, 0.25);
-        color: #c8eee0;
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        font-weight: bold;
-        letter-spacing: 0.06em;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-        pointer-events: none;
-        z-index: 150;
-        opacity: 0;
-        transform: translateY(8px) scale(0.95);
-        transition:
-          opacity 0.25s ease,
-          transform 0.25s ease;
-        backdrop-filter: blur(4px);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      #toast-container.has-legend {
-        padding: 10px 14px;
-        white-space: normal;
-        overflow: visible;
-        text-overflow: clip;
-      }
-
-      .toast-message {
-        white-space: nowrap;
-      }
-
-      .toast-legend {
-        display: grid;
-        grid-template-columns: repeat(4, auto);
-        gap: 6px 12px;
-        margin-top: 8px;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        color: #d8fff0;
-      }
-
-      .toast-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        min-width: 0;
-      }
-
-      .toast-legend-swatch {
-        width: 11px;
-        height: 11px;
-        flex: 0 0 auto;
-        border: 1px solid rgba(255, 255, 255, 0.45);
-        box-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
-      }
-
-      .toast-legend-label {
-        white-space: nowrap;
-      }
-
-      @media (max-width: 560px) {
-        .toast-legend {
-          grid-template-columns: repeat(2, auto);
-        }
-      }
-
-      #toast-container.visible {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-
-      #pause-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-family: Helvetica, Arial, sans-serif;
-        font-size: 4rem;
-        font-weight: bold;
-        color: #ffffff;
-        text-shadow:
-          0 0 20px rgba(255, 255, 255, 0.5),
-          0 0 40px rgba(255, 255, 255, 0.3);
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        animation: pause-pulse 1.2s ease-in-out infinite;
-        user-select: none;
-      }
-
-      @keyframes pause-pulse {
-        0%,
-        100% {
-          opacity: 1;
-          transform: translate(-50%, -50%) scale(1);
-        }
-        50% {
-          opacity: 0.6;
-          transform: translate(-50%, -50%) scale(1.05);
-        }
-      }
-
-      .panel-label {
-        font-weight: bold;
-        letter-spacing: 0.08em;
-      }
-
-      .value-health {
-        color: #00ff00;
-      }
-      .value-health-warning {
-        color: #ffff00;
-      }
-      .value-health-danger {
-        color: #ff0000;
-      }
-
-      .value-ai {
-        color: #ffed6a;
-      }
-      .value-ai-warning {
-        color: #ffaa38;
-      }
-      .value-ai-danger {
-        color: #ff6666;
-      }
-      .value-ai-off {
-        color: #888888;
-      }
-
-      .value-ai2 {
-        color: #6a9fff;
-      }
-      .value-ai2-warning {
-        color: #ffaa38;
-      }
-      .value-ai2-danger {
-        color: #ff6666;
-      }
-      .value-ai2-off {
-        color: #888888;
-      }
-
-      .value-camera {
-        color: #7cdfff;
-      }
-
-      .value-on {
-        color: #fff0a8;
-      }
-      .value-off {
-        color: #888888;
-      }
-
-      .panel-title {
-        font-weight: bold;
-        letter-spacing: 0.08em;
-      }
-
-      /* Loading Screen Styles */
-      #loading-screen {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: #0a0e0d;
-        background-image:
-          radial-gradient(
-            ellipse at 30% 70%,
-            rgba(20, 50, 35, 0.6) 0%,
-            transparent 50%
-          ),
-          radial-gradient(
-            ellipse at 70% 30%,
-            rgba(15, 35, 45, 0.4) 0%,
-            transparent 50%
-          );
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-        font-family: 'Courier New', monospace;
-        color: #ffffff;
-      }
-
-      .loading-title {
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 2rem;
-        text-transform: uppercase;
-        letter-spacing: 0.25em;
-        color: #ffffff;
-        text-shadow: 0 0 12px rgba(140, 220, 200, 0.3);
-      }
-
-      .loading-config {
-        margin-top: -0.75rem;
-        margin-bottom: 1.5rem;
-        text-align: center;
-        font-size: 0.8rem;
-        line-height: 1.7;
-        color: #b9dbcf;
-        letter-spacing: 0.08em;
-      }
-
-      .loading-config span {
-        color: #fff0a8;
-      }
-
-      .progress-container {
-        width: 60%;
-        max-width: 480px;
-        height: 30px;
-        background-color: #0f1412;
-        border: 1px solid rgba(120, 180, 160, 0.25);
-        border-radius: 3px;
-        overflow: hidden;
-        position: relative;
-        box-shadow:
-          0 0 16px rgba(0, 0, 0, 0.6),
-          inset 0 0 8px rgba(0, 0, 0, 0.4);
-      }
-
-      .progress-bar {
-        height: 100%;
-        width: 0%;
-        background: linear-gradient(
-          90deg,
-          #1a3a2c 0%,
-          #2d6b4a 40%,
-          #3a8a5c 60%,
-          #2d6b4a 100%
-        );
-        border-radius: 2px;
-        transition: width 0.15s linear;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .progress-bar::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -45%;
-        width: 45%;
-        bottom: 0;
-        background: linear-gradient(
-          90deg,
-          transparent 0%,
-          rgba(180, 255, 215, 0.08) 25%,
-          rgba(220, 255, 240, 0.36) 50%,
-          rgba(180, 255, 215, 0.08) 75%,
-          transparent 100%
-        );
-        animation: progress-sheen 1.35s linear infinite;
-        z-index: 1;
-      }
-
-      .progress-bar::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: repeating-linear-gradient(
-          90deg,
-          transparent 0px,
-          transparent 22px,
-          rgba(0, 0, 0, 0.35) 22px,
-          rgba(0, 0, 0, 0.35) 24px
-        );
-        z-index: 2;
-      }
-
-      @keyframes progress-sheen {
-        0% {
-          transform: translateX(0);
-        }
-        100% {
-          transform: translateX(325%);
-        }
-      }
-
-      .progress-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 1rem;
-        font-weight: bold;
-        color: #ffffff;
-        text-shadow:
-          0 0 4px rgba(0, 0, 0, 0.95),
-          0 0 12px rgba(190, 255, 225, 0.55);
-        letter-spacing: 0.12em;
-        z-index: 3;
-      }
-
-      .loading-details {
-        margin-top: 1.5rem;
-        min-height: 1.5rem;
-        font-size: 0.82rem;
-        color: #9db4aa;
-        text-align: center;
-        line-height: 1.5;
-        letter-spacing: 0.06em;
-      }
-
-      .loading-cache-status {
-        min-height: 1rem;
-        font-size: 0.58rem;
-        color: rgba(157, 180, 170, 0.58);
-        text-align: center;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        visibility: hidden;
-      }
-
-      .loading-warning {
-        display: none;
-        max-width: min(640px, calc(100vw - 48px));
-        margin-top: 0.9rem;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 196, 120, 0.24);
-        background: rgba(58, 34, 10, 0.42);
-        color: #ffd9a0;
-        font-size: 0.72rem;
-        line-height: 1.55;
-        text-align: center;
-        letter-spacing: 0.05em;
-      }
-    </style>
+    <link rel="stylesheet" href="/ui.css" />
   </head>
   <body>
+    <!-- Cinematic Background -->
+    <div class="teaser-bg"></div>
+    <div class="teaser-overlay"></div>
+    <div class="scanlines"></div>
+
     <!-- Loading Screen -->
     <div id="loading-screen">
-      <div class="loading-title">Rocket3D</div>
-      <div class="loading-config">
-        <div>Level: <span id="loading-level">-</span></div>
-        <div>Seed: <span id="loading-seed">-</span></div>
-      </div>
-      <div class="progress-container">
-        <div class="progress-bar" id="progress-bar"></div>
-        <div class="progress-text" id="progress-text">0%</div>
-      </div>
-      <div class="loading-details" id="loading-details">Initializing...</div>
-      <div class="loading-cache-status" id="loading-cache-status"></div>
-      <div class="loading-warning" id="loading-warning"></div>
-      <div
-        style="
-          position: absolute;
-          bottom: 4px;
-          right: 6px;
-          font-size: 11px;
-          opacity: 0.75;
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-          color: #c8eee0;
-        "
-      >
-        Copyright &copy; 2026 JPH |
-        <a
-          href="https://github.com/jphd3v/rocket3d"
-          target="_blank"
-          style="color: #c8eee0; text-decoration: none"
-          >SOURCE / LICENSE (AGPLv3)</a
-        >
+      <div class="loading-tease"></div>
+      <div class="loading-bg"></div>
+      <div class="loading-content">
+        <div class="loading-title" id="loading-title">ROCKET3D</div>
+        <div class="progress-row">
+          <div class="progress-container" id="progress-container">
+            <div class="progress-bar" id="progress-bar">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+          </div>
+          <div class="progress-text" id="progress-text">0%</div>
+        </div>
+        <div class="loading-details" id="loading-details">Generating world</div>
+        <div class="loading-config">
+          <span class="current-level-id" id="loading-level">LEVEL1</span>
+          <span class="current-separator loading-dot">·</span>
+          <span class="current-seed" id="loading-seed"
+            >seed rocket3d-dev-seed-01</span
+          >
+        </div>
+        <div class="loading-cache-status" id="loading-cache-status"></div>
+        <div class="loading-warning" id="loading-warning"></div>
       </div>
     </div>
 
     <canvas id="c"></canvas>
 
-    <!-- Vignette overlay -->
-    <div id="vignette"></div>
-
     <!-- Toast notifications -->
     <div id="toast-container"></div>
 
+    <!-- Pilot Briefing -->
+    <div id="pilot-briefing" class="pilot-briefing">
+      <div class="briefing-title">PILOT BRIEFING</div>
+      <div class="briefing-body">
+        Arrows steer &middot; Space thrust &middot; X fire<br />
+        Press H for Help / Controls
+      </div>
+    </div>
+
     <!-- UI Overlay Layer -->
     <div id="ui-overlay">
-      <!-- Game Health - minimal game mode display -->
-      <div id="game-health" class="game-health-good">HP 100</div>
+      <!-- Game Health -->
+      <div id="game-health" class="game-health-good">HULL 100</div>
 
       <!-- Stats Panel - bottom left (dev mode only) -->
-      <div id="stats-panel">
-        <div>Level: <span id="hud-level">-</span></div>
-        <div>Seed: <span id="hud-seed">-</span></div>
-        <div id="hud-warning-row" style="display: none">
-          Warning: <span id="hud-warning">-</span>
+      <div id="stats-panel" class="hud-panel">
+        <div class="panel-header">DIAGNOSTICS</div>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">Level</span>
+            <span id="hud-level" class="panel-value">-</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Seed</span>
+            <span id="hud-seed" class="panel-value">-</span>
+          </div>
+          <div
+            id="hud-warning-row"
+            class="panel-row"
+            style="display: none; color: var(--color-warn)"
+          >
+            <span class="panel-label">Warning</span>
+            <span id="hud-warning">-</span>
+          </div>
         </div>
-        <div>Position: <span id="hud-position">0, 0, 0</span></div>
-        <div>
-          Health: <span id="hud-health" class="value-health">100%</span>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">Pos</span>
+            <span id="hud-position" class="panel-value">0, 0, 0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Health</span>
+            <span id="hud-health" class="panel-value value-health">100%</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">AI 1</span>
+            <span id="hud-ai" class="panel-value value-ai-off">OFF</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">AI 2</span>
+            <span id="hud-ai2" class="panel-value value-ai2-off">OFF</span>
+          </div>
         </div>
-        <div>AI: <span id="hud-ai" class="value-ai-off">OFF</span></div>
-        <div>AI2: <span id="hud-ai2" class="value-ai2-off">OFF</span></div>
-        <div>Loaded Chunks: <span id="hud-loaded-chunks">0</span></div>
-        <div>Meshed Chunks: <span id="hud-meshed-chunks">0</span></div>
-        <div>Visible Chunks: <span id="hud-visible-chunks">0/0</span></div>
-        <div>Projectiles: <span id="hud-projectiles">0</span></div>
-        <div>Particles: <span id="hud-particles">0</span></div>
-        <div>Raycasts: <span id="hud-raycasts">0</span></div>
-        <div>Voxel Edits: <span id="hud-voxel-edits">0</span></div>
-        <div>Dirty Chunks: <span id="hud-dirty-chunks">0</span></div>
-        <div>Remeshed: <span id="hud-remeshed">0</span></div>
-        <div>Mid-LOD: <span id="hud-mid-lod">0%</span></div>
-        <div>Far Shell: <span id="hud-far-shell">0%</span></div>
-        <div>Level LOD Time: <span id="hud-level-load-time">0.0s</span></div>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">Chunks</span>
+            <span id="hud-loaded-chunks" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Mesh</span>
+            <span id="hud-meshed-chunks" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Visible</span>
+            <span id="hud-visible-chunks" class="panel-value">0/0</span>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">Objects</span>
+            <span id="hud-projectiles" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">VFX</span>
+            <span id="hud-particles" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Rays</span>
+            <span id="hud-raycasts" class="panel-value">0</span>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">Edits</span>
+            <span id="hud-voxel-edits" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Dirty</span>
+            <span id="hud-dirty-chunks" class="panel-value">0</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Remesh</span>
+            <span id="hud-remeshed" class="panel-value">0</span>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-row">
+            <span class="panel-label">LOD Mid</span>
+            <span id="hud-mid-lod" class="panel-value">0%</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">LOD Far</span>
+            <span id="hud-far-shell" class="panel-value">0%</span>
+          </div>
+          <div class="panel-row">
+            <span class="panel-label">Gen Time</span>
+            <span id="hud-level-load-time" class="panel-value">0</span>
+          </div>
+        </div>
+      </div>
+      <div id="options-panel" class="hud-panel">
+        <div class="panel-header">CONTROLS</div>
+
+        <div class="panel-section">
+          <div class="controls-row">
+            <span class="panel-label">Camera</span>
+            <span id="hud-camera" class="controls-value value-camera">3RD</span>
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">Cycle Camera</span>
+            <span class="controls-value">Z</span>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="controls-row">
+            <span class="panel-label">AI</span>
+            <span class="controls-value"
+              ><span id="hud-ai-toggle" class="value-off">OFF</span> (I)</span
+            >
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">HUD</span>
+            <span class="controls-value"
+              ><span id="hud-hud-toggle" class="value-on">ON</span> (U)</span
+            >
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">Crosshair</span>
+            <span class="controls-value"
+              ><span id="hud-crosshair-toggle" class="value-on">ON</span>
+              (Y)</span
+            >
+          </div>
+          <div id="hud-music-row" class="controls-row">
+            <span class="panel-label">Music</span>
+            <span class="controls-value music-value-wrapper"
+              ><span id="hud-music" class="value-off music-truncate">OFF</span>
+              (M)</span
+            >
+          </div>
+          <div id="hud-sfx-row" class="controls-row">
+            <span class="panel-label">SFX</span>
+            <span class="controls-value"
+              ><span id="hud-sfx" class="value-off">OFF</span> (N)</span
+            >
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div id="hud-weapon-row" class="controls-row">
+            <span class="panel-label">Weapon</span>
+            <span id="hud-weapon" class="controls-value value-on">-</span>
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">Fire</span>
+            <span class="controls-value">X</span>
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">Cycle Weapon</span>
+            <span class="controls-value">C</span>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="controls-row">
+            <span class="panel-label">Help</span>
+            <span class="controls-value">H</span>
+          </div>
+          <div class="controls-row">
+            <span class="panel-label">Pause</span>
+            <span class="controls-value">Esc / P</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Options Panel - top right (dev mode only) -->
-      <div id="options-panel">
-        <div class="panel-title">OPTIONS</div>
-        <div>
-          Arrows: pitch / roll<br />
-          Space: thrust<br />
-          X: fire<br />
-          C: cycle weapon
-        </div>
-        <div>
-          Camera:
-          <span id="hud-camera" class="value-camera">third-person</span><br />
-          Z: cycle camera<br />
-          W/A/S/D: height / orbit<br />
-          R: reset camera
-        </div>
-        <div>
-          Pause: P<br />
-          Fullscreen: F
-        </div>
-        <div id="hud-weapon-row">
-          Weapon: <span id="hud-weapon" class="value-on">-</span>
-        </div>
-        <div>AI: <span id="hud-ai-toggle" class="value-off">OFF</span> (I)</div>
-        <div>HUD: <span id="hud-hud-toggle" class="value-on">ON</span> (H)</div>
-        <div id="hud-crosshair-row">
-          Crosshair: <span id="hud-crosshair-toggle" class="value-on">ON</span>
-          (Y)
-        </div>
-        <div id="hud-music-row">
-          Music: <span id="hud-music" class="value-off">OFF</span>
-          <span id="hud-music-detail">(-)</span>
-        </div>
-        <div id="hud-sfx-row">
-          SFX: <span id="hud-sfx" class="value-off">OFF</span>
-          <span id="hud-sfx-detail">(-)</span>
-        </div>
-        <div id="hud-boundaries-row">
-          Boundaries:
-          <span id="hud-boundaries" class="value-off">OFF</span> (B)
-        </div>
-        <div>
-          T: dev stats<br />
-          0/1/2/3: LOD visibility<br />
-          L: LOD debug mode<br />
-          O: LOD stats
-        </div>
-      </div>
-
-      <!-- HUD - central reticle -->
       <canvas id="hud"></canvas>
-
-      <!-- Source / License link -->
-      <div
-        id="source-link"
-        style="
-          position: absolute;
-          bottom: 4px;
-          right: 6px;
-          font-family: 'Courier New', monospace;
-          font-size: 11px;
-          opacity: 0.75;
-          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-          pointer-events: auto;
-          z-index: 105;
-          color: #c8eee0;
-        "
-      >
-        Copyright &copy; 2026 JPH |
-        <a
-          href="https://github.com/jphd3v/rocket3d"
-          target="_blank"
-          style="color: #c8eee0; text-decoration: none"
-          >SOURCE / LICENSE (AGPLv3)</a
-        >
-      </div>
     </div>
 
     <div id="menus">
@@ -829,60 +245,308 @@
 
     <!-- Game menu overlay -->
     <div id="game-menu-overlay">
+      <div class="menu-teaser-sketch"></div>
+      <div class="start-teaser"></div>
+      <div class="start-particles" aria-hidden="true">
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+        <span class="start-particle"></span>
+      </div>
+      <div class="start-streaks" aria-hidden="true">
+        <span class="start-streak"></span>
+        <span class="start-streak"></span>
+        <span class="start-streak"></span>
+      </div>
+      <a
+        class="title-sketch-copyright"
+        href="https://github.com/jphd3v/rocket3d"
+        target="_blank"
+        rel="noreferrer"
+        >© 2026 JPH — AGPLv3</a
+      >
+
       <div class="game-menu-card">
-        <div class="game-menu-kicker">Rocket3D</div>
-        <div class="game-menu-title" id="game-menu-title">Mission Setup</div>
-        <div class="game-menu-subtitle" id="game-menu-subtitle">
-          Select a level and seed to launch
+        <div class="game-menu-title title-logo" id="game-menu-title">
+          <span class="logo-main">ROCKET</span><span class="logo-mark">3D</span>
         </div>
-        <form class="game-menu-form" id="game-menu-form">
-          <label class="game-menu-field" for="menu-level">
-            <span class="game-menu-field-label">Level</span>
-            <select class="game-menu-select" id="menu-level"></select>
-          </label>
-          <label class="game-menu-field" for="menu-seed">
-            <span class="game-menu-field-label">Seed</span>
-            <input
-              class="game-menu-input"
-              id="menu-seed"
-              type="text"
-              maxlength="64"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </label>
-          <div class="game-menu-preview">
-            <div>Level: <span id="menu-preview-level">-</span></div>
-            <div>Seed: <span id="menu-preview-seed">-</span></div>
+        <div class="game-menu-subtitle title-subtitle" id="game-menu-subtitle">
+          VOXEL CAVE FLIGHT
+        </div>
+
+        <!-- Main View: Actions first -->
+        <div id="menu-main-view">
+          <div class="mission-summary-compact">
+            <span id="menu-summary-text">
+              <span class="current-level-id">LEVEL-01</span>
+              <span class="current-separator">·</span>
+              <span class="current-seed">seed default</span>
+            </span>
           </div>
-          <div class="game-menu-warning" id="game-menu-warning"></div>
-          <label class="game-menu-toggle" for="menu-clear-terrain-cache">
-            <input id="menu-clear-terrain-cache" type="checkbox" />
-            <span>Clear browser terrain cache before loading</span>
-          </label>
-          <div class="game-menu-actions">
-            <button class="game-menu-button" id="menu-resume" type="button">
-              Resume
-            </button>
-            <button class="game-menu-button" id="menu-randomize" type="button">
-              Random Seed
+
+          <div class="game-menu-list">
+            <button class="menu-list-item active" id="menu-resume-action">
+              RESUME
             </button>
             <button
-              class="game-menu-button"
-              id="menu-restart-current"
+              class="menu-list-item"
+              id="menu-start-launch"
+              style="display: none"
+            >
+              START GAME
+            </button>
+            <button class="menu-list-item" id="menu-restart-action">
+              RESTART
+            </button>
+            <button class="menu-list-item" id="menu-change-mission">
+              CHANGE LEVEL
+            </button>
+
+            <form class="inline-mission-panel" id="game-menu-form">
+              <div class="inline-level-picker">
+                <button
+                  type="button"
+                  class="inline-picker-arrow"
+                  id="menu-prev-level"
+                >
+                  <svg
+                    width="12"
+                    height="20"
+                    viewBox="0 0 12 20"
+                    fill="currentColor"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <rect x="8" y="0" width="4" height="4" />
+                    <rect x="4" y="4" width="4" height="4" />
+                    <rect x="0" y="8" width="4" height="4" />
+                    <rect x="4" y="12" width="4" height="4" />
+                    <rect x="8" y="16" width="4" height="4" />
+                  </svg>
+                </button>
+                <div class="inline-level-current" id="level-dropdown-trigger">
+                  <div
+                    class="level-carousel-viewport"
+                    id="level-carousel-viewport"
+                  >
+                    <!-- Content injected by JS -->
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="inline-picker-arrow"
+                  id="menu-next-level"
+                >
+                  <svg
+                    width="12"
+                    height="20"
+                    viewBox="0 0 12 20"
+                    fill="currentColor"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <rect x="0" y="0" width="4" height="4" />
+                    <rect x="4" y="4" width="4" height="4" />
+                    <rect x="8" y="8" width="4" height="4" />
+                    <rect x="4" y="12" width="4" height="4" />
+                    <rect x="0" y="16" width="4" height="4" />
+                  </svg>
+                </button>
+              </div>
+
+              <div id="level-dropdown-options" style="display: none"></div>
+              <select
+                class="game-menu-select"
+                id="menu-level"
+                style="display: none"
+              ></select>
+
+              <div class="inline-seed-row">
+                <span class="inline-seed-label">Seed</span>
+                <span class="inline-seed-field-wrap">
+                  <input
+                    class="seed-field inline-seed-field"
+                    id="menu-seed"
+                    type="text"
+                    maxlength="64"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </span>
+              </div>
+
+              <label class="cache-row" for="menu-clear-terrain-cache">
+                <span class="cache-checkbox-slot">
+                  <input
+                    class="cache-checkbox-input"
+                    id="menu-clear-terrain-cache"
+                    type="checkbox"
+                  />
+                </span>
+                <span class="cache-label">Clear terrain cache</span>
+              </label>
+
+              <div class="game-menu-preview" style="display: none">
+                <span id="menu-preview-level"></span>
+                <span id="menu-preview-seed"></span>
+              </div>
+
+              <div class="game-menu-warning" id="game-menu-warning"></div>
+
+              <button
+                id="menu-resume"
+                type="button"
+                style="display: none"
+              ></button>
+              <button
+                id="menu-restart-current"
+                type="button"
+                style="display: none"
+              ></button>
+            </form>
+
+            <button class="menu-list-item" id="menu-help-action">
+              HELP / CONTROLS
+            </button>
+          </div>
+        </div>
+
+        <!-- Help View: Controls and Manual -->
+        <div id="menu-help-view" style="display: none">
+          <div class="help-scroll-area">
+            <div class="help-section">
+              <div class="help-header">Flight</div>
+              <div class="help-control-row">
+                <span class="help-label">Pitch / Roll</span>
+                <span class="help-control-key">Arrows</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Thrust</span>
+                <span class="help-control-key">Space</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Fire</span>
+                <span class="help-control-key">X</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Cycle Weapon</span>
+                <span class="help-control-key">C</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-header">Camera</div>
+              <div class="help-control-row">
+                <span class="help-label">Cycle Camera</span>
+                <span class="help-control-key">Z</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Orbit / Height</span>
+                <span class="help-control-key">WASD</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Reset View</span>
+                <span class="help-control-key">R</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-header">Systems</div>
+              <div class="help-control-row">
+                <span class="help-label">Pause / Menu</span>
+                <span class="help-control-key">Esc / P</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Help / Controls</span>
+                <span class="help-control-key">H</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Toggle HUD</span>
+                <span class="help-control-key">U</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Toggle Crosshair</span>
+                <span class="help-control-key">Y</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Toggle AI</span>
+                <span class="help-control-key">I</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-header">Audio</div>
+              <div class="help-control-row">
+                <span class="help-label">Toggle Music</span>
+                <span class="help-control-key">M</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Toggle SFX</span>
+                <span class="help-control-key">N</span>
+              </div>
+            </div>
+            <div class="help-section">
+              <div class="help-header">Developer / Debug</div>
+              <div class="help-control-row">
+                <span class="help-label">Dev Stats</span>
+                <span class="help-control-key">T</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Grid / Bounds</span>
+                <span class="help-control-key">B</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">Far Shell Stats</span>
+                <span class="help-control-key">O</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">LOD Debug Mode</span>
+                <span class="help-control-key">L</span>
+              </div>
+              <div class="help-control-row">
+                <span class="help-label">LOD Visibility</span>
+                <span class="help-control-key">0 / 1 / 2 / 3</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="game-menu-actions-list">
+            <button
+              class="menu-list-item active"
+              id="menu-help-back"
               type="button"
             >
-              Restart Current
-            </button>
-            <button
-              class="game-menu-button game-menu-button-primary"
-              id="menu-apply"
-              type="submit"
-            >
-              Start Game
+              BACK
             </button>
           </div>
-        </form>
+        </div>
+
+        <div class="gamepad-hints" id="menu-hints-main">
+          <div class="hint-item">
+            <span class="hint-key">A</span> <span>SELECT</span>
+          </div>
+          <div class="hint-item">
+            <span class="hint-key">B</span> <span>BACK</span>
+          </div>
+          <div class="hint-item">
+            <span class="hint-key is-wide">↑↓</span> <span>NAVIGATE</span>
+          </div>
+        </div>
+
+        <div class="gamepad-hints" id="menu-hints-config" style="display: none">
+          <div class="hint-item">
+            <span class="hint-key">A</span> <span>SELECT</span>
+          </div>
+          <div class="hint-item">
+            <span class="hint-key">B</span> <span>BACK</span>
+          </div>
+          <div class="hint-item">
+            <span class="hint-key is-wide">←/→</span> <span>LEVEL</span>
+          </div>
+        </div>
       </div>
     </div>
 

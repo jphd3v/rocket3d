@@ -9,6 +9,7 @@ const ONE_SHOT_INPUT_KEYS = [
   'cameraReset',
   'cyclePerspective',
   'toggleHud',
+  'toggleHelp',
   'toggleCrosshair',
   'toggleDevMode',
   'toggleMenu',
@@ -39,17 +40,10 @@ function createEmptyInputs() {
     toggleFullscreen: 0,
     cameraZoomIn: 0,
     cameraZoomOut: 0,
-    cameraOrbitLeft: 0,
-    cameraOrbitRight: 0,
     cameraReset: 0,
-    perspectiveFirst: 0,
-    perspectiveThird: 0,
-    perspectiveObserver: 0,
     cyclePerspective: 0,
-    cameraHeightUp: 0,
-    cameraHeightDown: 0,
-    toggleReverseView: 0,
     toggleHud: 0,
+    toggleHelp: 0,
     toggleCrosshair: 0,
     toggleDevMode: 0,
     toggleMenu: 0,
@@ -207,6 +201,10 @@ function keydown(heldInputs, oneShotInputs, event) {
       break;
 
     case 'KeyH':
+      oneShotInputs.toggleHelp = 1;
+      break;
+
+    case 'KeyU':
       oneShotInputs.toggleHud = 1;
       break;
 

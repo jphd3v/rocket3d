@@ -128,3 +128,5 @@ The bundled music is permissively-licensed tracker music downloaded from https:/
 | natural_vision      | `natural.xm`                      | Kokesz   | Public Domain | [modarchive.org](https://modarchive.org/index.php?request=view_by_moduleid&query=174357) |
 | Enemy Influx        | `k_jose_-_enemy_influx.s3m`       | K. Jose  | CC0           | [modarchive.org](https://modarchive.org/index.php?request=view_by_moduleid&query=190562) |
 | Dangerous Radiation | `dangeradiation.xm`               | JAM      | Public Domain | [modarchive.org](https://modarchive.org/index.php?request=view_by_moduleid&query=169047) |
+| Crush               | `drozerix_-_crush.xm`             | Drozerix | Public Domain | [modarchive.org](https://modarchive.org/index.php?request=view_by_moduleid&query=179581) |
+| Reloaded insanity.  | `drozerix_-_reloaded_insanity.xm` | Drozerix | Public Domain | [modarchive.org](https://modarchive.org/index.php?request=view_by_moduleid&query=177968) |

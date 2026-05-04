@@ -441,11 +441,11 @@ async function main() {
         loadingManager,
         80,
         88,
-        'Building far terrain shell'
+        'LOADING DISTANT TERRAIN'
       );
     }
 
-    loadingManager.setManualProgress(88, 'Warming outer terrain...');
+    loadingManager.setManualProgress(88, 'GENERATING WORLD...');
     await warmupChunksAround(
       chunkManager,
       startupPosition,
@@ -458,12 +458,12 @@ async function main() {
         onProgress: function (progress) {
           loadingManager.setManualProgress(
             88 + 6 * progress,
-            'Warming outer terrain...'
+            'GENERATING WORLD...'
           );
         },
       }
     );
-    loadingManager.setManualProgress(94, 'Outer terrain warmup complete');
+    loadingManager.setManualProgress(94, 'WORLD GENERATION COMPLETE');
 
     const detailProps = await createDetailProps(chunkManager.generator, world);
     loadingManager.setManualProgress(98, 'Preparing launch...');

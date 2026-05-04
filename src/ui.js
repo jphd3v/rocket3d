@@ -42,8 +42,8 @@ function addStats(parentDomElement) {
   stats.showPanel(0);
 
   stats.dom.style.position = 'absolute';
-  stats.dom.style.top = '10px';
-  stats.dom.style.left = '10px';
+  stats.dom.style.top = '16px';
+  stats.dom.style.left = '16px';
   stats.dom.style.zIndex = '101';
   stats.dom.style.boxShadow = '0 10px 24px rgba(0, 0, 0, 0.28)';
 
@@ -1266,10 +1266,38 @@ function clearToastContent() {
   }
 }
 
-function appendToastText(message) {
+function appendToastText(message, optionsTitle) {
+  var titleText = optionsTitle;
+  var bodyText = message;
+
+  if (!titleText) {
+    var parts;
+    if (String(message).includes(': ')) {
+      parts = String(message).split(': ');
+      titleText = parts[0];
+      bodyText = parts.slice(1).join(': ');
+    } else if (
+      String(message).endsWith(' On') ||
+      String(message).endsWith(' Off')
+    ) {
+      parts = String(message).split(' ');
+      bodyText = parts.pop();
+      titleText = parts.join(' ');
+    } else {
+      titleText = 'SYSTEM';
+    }
+  }
+
+  if (titleText) {
+    var title = document.createElement('div');
+    title.className = 'toast-title';
+    title.textContent = String(titleText).toUpperCase();
+    toastContainer.appendChild(title);
+  }
+
   var text = document.createElement('div');
-  text.className = 'toast-message';
-  text.textContent = String(message).toUpperCase();
+  text.className = 'toast-body';
+  text.textContent = String(bodyText);
   toastContainer.appendChild(text);
 }
 
@@ -1302,6 +1330,35 @@ function appendToastLegend(legendItems) {
   toastContainer.appendChild(legend);
 }
 
+function showPilotBriefing() {
+  if (typeof localStorage === 'undefined') return;
+
+  var hasSeenBriefing = localStorage.getItem('rocket3d.seenPilotBriefing.v1');
+  if (hasSeenBriefing === 'true') {
+    return;
+  }
+
+  var briefing = document.getElementById('pilot-briefing');
+  if (!briefing) return;
+
+  localStorage.setItem('rocket3d.seenPilotBriefing.v1', 'true');
+
+  setTimeout(function () {
+    briefing.classList.add('visible');
+
+    var hideBriefing = function () {
+      briefing.classList.remove('visible');
+      window.removeEventListener('keydown', hideBriefing);
+      window.removeEventListener('mousedown', hideBriefing);
+    };
+
+    window.addEventListener('keydown', hideBriefing, { once: true });
+    window.addEventListener('mousedown', hideBriefing, { once: true });
+
+    setTimeout(hideBriefing, 12000);
+  }, 500);
+}
+
 function showToast(message, options = {}) {
   if (!toastContainer) {
     toastContainer = document.getElementById('toast-container');
@@ -1315,9 +1372,13 @@ function showToast(message, options = {}) {
   }
 
   clearToastContent();
-  appendToastText(message);
+  appendToastText(message, options.title);
   appendToastLegend(options.legend);
   toastContainer.classList.toggle('has-legend', Boolean(options.legend));
+  toastContainer.classList.toggle(
+    'is-multiline',
+    Boolean(options.legend) || Boolean(options.multiline)
+  );
   toastContainer.classList.add('visible');
 
   toastTimeout = setTimeout(function () {
@@ -1396,7 +1457,7 @@ function updateUI(
 
   var gameHealthEl = document.getElementById('game-health');
   if (gameHealthEl) {
-    gameHealthEl.textContent = 'HP ' + health;
+    gameHealthEl.textContent = 'HULL ' + health;
     var healthClass =
       health > 70
         ? 'game-health-good'
@@ -1600,21 +1661,23 @@ function updateOptions(
 
   const crosshairRow = document.getElementById('hud-crosshair-row');
   const crosshairToggleEl = document.getElementById('hud-crosshair-toggle');
-  if (hudEnabled) {
-    crosshairRow.style.display = 'none';
-  } else {
-    crosshairRow.style.display = 'block';
-    crosshairToggleEl.textContent = crosshairEnabled ? 'ON' : 'OFF';
-    setElementClass(
-      crosshairToggleEl,
-      crosshairEnabled ? 'value-on' : 'value-off'
-    );
+  if (crosshairRow && crosshairToggleEl) {
+    if (hudEnabled) {
+      crosshairRow.style.display = 'none';
+    } else {
+      crosshairRow.style.display = 'grid';
+      crosshairToggleEl.textContent = crosshairEnabled ? 'ON' : 'OFF';
+      setElementClass(
+        crosshairToggleEl,
+        crosshairEnabled ? 'value-on' : 'value-off'
+      );
+    }
   }
 
   const weaponRow = document.getElementById('hud-weapon-row');
   const weaponEl = document.getElementById('hud-weapon');
   if (weaponState) {
-    weaponRow.style.display = 'block';
+    weaponRow.style.display = '';
     weaponEl.textContent = weaponState.label;
   } else {
     weaponRow.style.display = 'none';
@@ -1622,23 +1685,19 @@ function updateOptions(
 
   const musicRow = document.getElementById('hud-music-row');
   const musicEl = document.getElementById('hud-music');
-  const musicDetailEl = document.getElementById('hud-music-detail');
   if (soundtrackState) {
-    musicRow.style.display = 'block';
+    musicRow.style.display = '';
     const musicOnMatch = soundtrackState.text.match(/^(.+?)\s+ON\s+\((.+)\)$/);
     const musicOffMatch = soundtrackState.text.match(/^(OFF)\s+\((.+)\)$/);
     if (musicOnMatch) {
       musicEl.textContent = musicOnMatch[1] + ' ON';
       setElementClass(musicEl, 'value-on');
-      musicDetailEl.textContent = '(' + musicOnMatch[2] + ')';
     } else if (musicOffMatch) {
       musicEl.textContent = 'OFF';
       setElementClass(musicEl, 'value-off');
-      musicDetailEl.textContent = '(' + musicOffMatch[2] + ')';
     } else {
       musicEl.textContent = soundtrackState.text;
       setElementClass(musicEl, '');
-      musicDetailEl.textContent = '';
     }
   } else {
     musicRow.style.display = 'none';
@@ -1646,23 +1705,19 @@ function updateOptions(
 
   const sfxRow = document.getElementById('hud-sfx-row');
   const sfxEl = document.getElementById('hud-sfx');
-  const sfxDetailEl = document.getElementById('hud-sfx-detail');
   if (audioState) {
-    sfxRow.style.display = 'block';
+    sfxRow.style.display = '';
     const audioOnMatch = audioState.text.match(/^(ON)\s+\((.+)\)$/);
     const audioOffMatch = audioState.text.match(/^(OFF)\s+\((.+)\)$/);
     if (audioOnMatch) {
       sfxEl.textContent = 'ON';
       setElementClass(sfxEl, 'value-on');
-      sfxDetailEl.textContent = '(' + audioOnMatch[2] + ')';
     } else if (audioOffMatch) {
       sfxEl.textContent = 'OFF';
       setElementClass(sfxEl, 'value-off');
-      sfxDetailEl.textContent = '(' + audioOffMatch[2] + ')';
     } else {
       sfxEl.textContent = audioState.text;
       setElementClass(sfxEl, '');
-      sfxDetailEl.textContent = '';
     }
   } else {
     sfxRow.style.display = 'none';
@@ -1670,14 +1725,14 @@ function updateOptions(
 
   const boundariesRow = document.getElementById('hud-boundaries-row');
   const boundariesEl = document.getElementById('hud-boundaries');
-  if (chunkManager) {
-    boundariesRow.style.display = 'block';
+  if (boundariesRow && boundariesEl && chunkManager) {
+    boundariesRow.style.display = '';
     boundariesEl.textContent = chunkManager.showChunkBoundaries ? 'ON' : 'OFF';
     setElementClass(
       boundariesEl,
       chunkManager.showChunkBoundaries ? 'value-on' : 'value-off'
     );
-  } else {
+  } else if (boundariesRow) {
     boundariesRow.style.display = 'none';
   }
 }
@@ -1690,4 +1745,5 @@ export {
   updateSpatialLocatorHud,
   setDevMode,
   showToast,
+  showPilotBriefing,
 };

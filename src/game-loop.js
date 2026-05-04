@@ -12,6 +12,7 @@ import {
   updateSpatialLocatorHud,
   setDevMode,
   showToast,
+  showPilotBriefing,
 } from './ui.js';
 import { updateChunkManager } from './chunk-streaming.js';
 import { raycastVoxelSegmentBudgeted } from './voxel-ray-traversal.js';
@@ -123,6 +124,13 @@ function initGameLoop(
       return;
     }
 
+    if (gamePaused && pauseOverlayMode === 'help') {
+      if (typeof gameMenu.openHelpMenu === 'function') {
+        gameMenu.openHelpMenu(gameConfig, gameConfigWarnings);
+      }
+      return;
+    }
+
     gameMenu.close();
   }
 
@@ -178,6 +186,7 @@ function initGameLoop(
   let lastShadowUpdateTime = 0;
   let lastLodVisibilityUpdateTime = 0;
   let lastDetailPropVisibilityUpdateTime = 0;
+  let hasShownPilotBriefing = false;
   const UI_UPDATE_INTERVAL_MS = 125;
   const LOD_VISIBILITY_INTERVAL_MS = 150;
   const DETAIL_PROP_VISIBILITY_INTERVAL_MS = 250;
@@ -2148,6 +2157,11 @@ function initGameLoop(
   }
 
   function gameLoop() {
+    if (!gamePaused && !hasShownPilotBriefing) {
+      hasShownPilotBriefing = true;
+      showPilotBriefing();
+    }
+
     stats.begin();
 
     inputs = pollInputs();
@@ -2156,9 +2170,23 @@ function initGameLoop(
       if (!gamePaused) {
         setPauseState(true, 'menu');
       } else if (pauseOverlayMode === 'menu') {
-        setPauseState(false);
+        if (gameMenu.isSubmenuOpen && gameMenu.isSubmenuOpen()) {
+          gameMenu.backToMain();
+        } else {
+          setPauseState(false);
+        }
       } else {
         setPauseState(true, 'menu');
+      }
+    }
+
+    if (inputs.toggleHelp && gameMenu) {
+      if (!gamePaused) {
+        setPauseState(true, 'help');
+      } else if (pauseOverlayMode === 'help') {
+        setPauseState(false);
+      } else {
+        setPauseState(true, 'help');
       }
     }
 
@@ -2418,7 +2446,7 @@ function initGameLoop(
       weaponSystem.cycleWeapon();
       var weaponState = weaponSystem.getUiState();
       if (weaponState && weaponState.label) {
-        showToast(weaponState.label);
+        showToast('Weapon: ' + weaponState.label);
       }
     }
 
